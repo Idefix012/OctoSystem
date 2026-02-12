@@ -1,42 +1,65 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* src/App.css */
+
+/* --- SIDEBAR ANIMATION --- */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: -280px; /* Caché à gauche par défaut */
+  width: 260px;
+  height: 100vh;
+  background-color: var(--dark);
+  color: white;
+  transition: left 0.3s ease-in-out;
+  z-index: 1000;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.sidebar.open {
+  left: 0; /* Apparaît à l'écran */
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Overlay sombre */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 900;
+  opacity: 0;
+  visibility: hidden;
+  transition: 0.3s;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.overlay.active {
+  opacity: 1;
+  visibility: visible;
 }
 
-.card {
-  padding: 2em;
+/* Style interne sidebar */
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    font-size: 1.2rem;
 }
+.close-btn { background:none; border:none; color:white; font-size:2rem; cursor:pointer;}
 
-.read-the-docs {
-  color: #888;
+.nav-links li {
+    padding: 15px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    gap: 15px;
+    align-items: center;
 }
+.nav-links li:hover, .nav-links li.active {
+    background-color: rgba(255,255,255,0.1);
+    color: var(--primary);
+}
+.sidebar-footer { margin-top: auto; font-size: 0.8rem; color: #666; text-align: center;}

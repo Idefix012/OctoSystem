@@ -1,34 +1,45 @@
+// src/App.jsx
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import Header from './components/Header'
+import Sidebar from './components/Sidebar'
 
 function App() {
-  const [count, setCount] = useState(0)
+  // État pour gérer l'ouverture du menu (false = fermé par défaut)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Fonctions pour ouvrir/fermer
+  const toggleMenu = () => setIsSidebarOpen(!isSidebarOpen);
+  const closeMenu = () => setIsSidebarOpen(false);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div className="app-container">
+      
+      {/* 1. La Barre du haut (Burger + Titre) */}
+      <Header onToggleMenu={toggleMenu} />
+
+      {/* 2. Le Menu Latéral (Caché ou visible selon le state) */}
+      <Sidebar isOpen={isSidebarOpen} onClose={closeMenu} />
+
+      {/* 3. Le Contenu Principal */}
+      <main style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+        
+        {/* C'est ici qu'on mettra tes widgets plus tard */}
+        <h1>Tableau de bord</h1>
+        <p>Bienvenue Evan. La structure est prête !</p>
+        
+        <div style={{ 
+            marginTop: '20px', 
+            padding: '20px', 
+            background: 'white', 
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+        }}>
+            <p>🚧 Zone des graphiques (Chart.js) à venir...</p>
+        </div>
+
+      </main>
+    </div>
   )
 }
 
