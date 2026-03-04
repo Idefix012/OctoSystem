@@ -10,26 +10,28 @@ import HeaderView from './views/HeaderView';
 import SidebarView from './views/SidebarView';
 
 function App() {
-  // 1. Appel du Contrôleur (on récupère logique + données)
   const { isSidebarOpen, toggleMenu, closeMenu, menuItems } = useLayoutController();
 
   return (
     <div className="app-container">
       
-      {/* 2. Injection dans les Vues */}
-      <HeaderView onToggleMenu={toggleMenu} />
-      
+      {/* 1. La Sidebar en premier (pour qu'elle soit fixée à gauche sur PC) */}
       <SidebarView 
         isOpen={isSidebarOpen} 
         onClose={closeMenu} 
         menuItems={menuItems} 
       />
 
-      {/* Contenu Principal */}
-      <main style={{ padding: '20px' }}>
-        <h1>Architecture MVC</h1>
-        <p>Les données viennent du Modèle, la logique du Contrôleur, et l'affichage des Vues.</p>
-      </main>
+      {/* 2. Le conteneur de droite (Header + Contenu) */}
+      <div className="main-content">
+        <HeaderView onToggleMenu={toggleMenu} />
+        
+        <main style={{ padding: '20px' }}>
+          <h1>Architecture MVC</h1>
+          <p>Les données viennent du Modèle, la logique du Contrôleur, et l'affichage des Vues.</p>
+        </main>
+      </div>
+
     </div>
   );
 }
