@@ -1,38 +1,44 @@
 // src/App.jsx
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
 
-// Import du Contrôleur
 import { useLayoutController } from './controllers/useLayoutController';
-
-// Import des Vues
 import HeaderView from './views/HeaderView';
 import SidebarView from './views/SidebarView';
+import DashboardView from './views/DashboardView';
+import HistoryView from './views/HistoryView';
+import CommunityView from './views/CommunityView';
+import SettingsView from './views/SettingsView';
 
 function App() {
   const { isSidebarOpen, toggleMenu, closeMenu, menuItems } = useLayoutController();
 
   return (
-    <div className="app-container">
-      
-      {/* 1. La Sidebar en premier (pour qu'elle soit fixée à gauche sur PC) */}
-      <SidebarView 
-        isOpen={isSidebarOpen} 
-        onClose={closeMenu} 
-        menuItems={menuItems} 
-      />
-
-      {/* 2. Le conteneur de droite (Header + Contenu) */}
-      <div className="main-content">
-        <HeaderView onToggleMenu={toggleMenu} />
+    // 1. On englobe toute l'application dans le composant Router
+    <Router>
+      <div className="app-container">
         
-        <main style={{ padding: '20px' }}>
-          <h1>Architecture MVC</h1>
-          <p>Les données viennent du Modèle, la logique du Contrôleur, et l'affichage des Vues.</p>
-        </main>
-      </div>
+        <SidebarView isOpen={isSidebarOpen} onClose={closeMenu} menuItems={menuItems} />
 
-    </div>
+        <div className="main-content">
+          <HeaderView onToggleMenu={toggleMenu} />
+          
+          <main>
+            {/* 2. C'est ici que le contenu change dynamiquement selon l'URL */}
+            <Routes>
+              <Route path="/" element={<DashboardView />} />
+              <Route path="/history" element={<HistoryView />} />
+              <Route path="/community" element={<CommunityView />} />
+              
+              {/* 2. LA NOUVELLE PAGE PARAMÈTRES */}
+              <Route path="/settings" element={<SettingsView />} />
+            </Routes>
+          </main>
+        </div>
+
+      </div>
+    </Router>
   );
 }
 
