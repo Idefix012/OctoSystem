@@ -47,7 +47,7 @@ const GoalChart = () => {
 
 const styles = {
   card: {
-    background: 'white',
+    background: 'var(--bg-card)',
     padding: '20px',
     borderRadius: '16px',
     boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
@@ -58,7 +58,7 @@ const styles = {
   },
   title: {
     fontSize: '0.85rem',
-    color: '#888',
+    color: 'var(--text-muted)',
     fontWeight: 'bold',
     marginBottom: '15px',
     textAlign: 'center'
@@ -80,7 +80,7 @@ const styles = {
   percentage: {
     fontSize: '2rem',
     fontWeight: 'bold',
-    color: '#2C3E50'
+    color: 'var(--text-main)'
   }
 };
 

@@ -45,8 +45,8 @@ const DashboardView = () => {
 const styles = {
     dashboard: { padding: '20px', maxWidth: '1200px', margin: '0 auto', width: '100%' },
     welcome: { marginBottom: '30px' },
-    title: { fontSize: '1.8rem', color: '#2C3E50', marginBottom: '5px' },
-    subtitle: { color: '#888' },
+    title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
+    subtitle: { color: 'var(--text-muted)' },
     topGrid: { 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',

@@ -47,8 +47,8 @@ const CommunityView = () => {
 
 const styles = {
   container: { padding: '20px', maxWidth: '800px', margin: '0 auto', width: '100%' },
-  title: { fontSize: '1.8rem', color: '#2C3E50', marginBottom: '5px' },
-  subtitle: { color: '#888', marginBottom: '30px' }
+  title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
+  subtitle: { color: 'var(--text-muted)', marginBottom: '30px' }
 };
 
 export default CommunityView;

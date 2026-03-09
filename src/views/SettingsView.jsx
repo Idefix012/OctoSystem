@@ -2,12 +2,25 @@
 import React, { useState } from 'react';
 
 const SettingsView = () => {
-  // Nos états pour mémoriser les choix de l'utilisateur
   const [language, setLanguage] = useState('fr');
-  const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
+  
+  // 1. On vérifie si le mode sombre est déjà activé
+  const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
 
-  // Fonction pour simuler la sauvegarde
+  // 2. La fonction qui fait la bascule
+  const toggleDarkMode = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    
+    // On ajoute ou on retire la classe sur le body du site
+    if (newMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  };
+
   const handleSave = () => {
     alert("Vos préférences ont été sauvegardées avec succès !");
   };
@@ -20,7 +33,6 @@ const SettingsView = () => {
       <div className="settings-card">
         <h3>Préférences d'affichage</h3>
         
-        {/* Ligne 1 : Langue */}
         <div className="setting-item">
           <div className="setting-info">
             <h4>Langue de l'interface</h4>
@@ -37,17 +49,17 @@ const SettingsView = () => {
           </select>
         </div>
 
-        {/* Ligne 2 : Thème Sombre */}
         <div className="setting-item">
           <div className="setting-info">
             <h4>Thème Sombre (Dark Mode)</h4>
             <p>Passez l'interface en couleurs sombres pour reposer vos yeux.</p>
           </div>
           <label className="switch">
+            {/* 3. On utilise notre nouvelle fonction ici */}
             <input 
               type="checkbox" 
               checked={darkMode} 
-              onChange={() => setDarkMode(!darkMode)} 
+              onChange={toggleDarkMode} 
             />
             <span className="slider"></span>
           </label>
@@ -55,7 +67,6 @@ const SettingsView = () => {
 
         <h3 style={{ marginTop: '40px' }}>Système</h3>
 
-        {/* Ligne 3 : Notifications (Celui que tu voulais garder) */}
         <div className="setting-item">
           <div className="setting-info">
             <h4>Alerte de remplissage</h4>
@@ -79,10 +90,11 @@ const SettingsView = () => {
   );
 };
 
+// 4. On utilise les variables CSS au lieu du gris et noir en dur
 const styles = {
   container: { padding: '20px', maxWidth: '800px', margin: '0 auto', width: '100%' },
-  title: { fontSize: '1.8rem', color: '#2C3E50', marginBottom: '5px' },
-  subtitle: { color: '#888', marginBottom: '30px' }
+  title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
+  subtitle: { color: 'var(--text-muted)', marginBottom: '30px' }
 };
 
 export default SettingsView;
