@@ -31,7 +31,7 @@ function App() {
         <SidebarView isOpen={isSidebarOpen} onClose={closeMenu} menuItems={menuItems} />
 
         <div className="main-content">
-          <HeaderView onToggleMenu={toggleMenu} />
+          <HeaderView onToggleMenu={toggleMenu} user={currentUser} />
           
           <main>
             <Routes>

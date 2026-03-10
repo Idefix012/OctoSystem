@@ -30,10 +30,17 @@ const LoginView = ({ onLoginSuccess }) => {
       
       // 3. Si l'API valide la connexion (souvent un code 200 OK)
       if (response.ok) {
-        const userData = await response.json();
-        console.log("Connexion réussie pour :", userData.prenom);
+        const rawData = await response.json();
         
-        // On débloque l'application avec les données de l'utilisateur
+        // 1. On gère le cas où c'est un tableau (au cas où)
+        let formattedData = Array.isArray(rawData) ? rawData[0] : rawData;
+        
+        // 2. LE DÉBLOCAGE : On ouvre le tiroir "donnees" si l'API l'a mis dedans !
+        const userData = formattedData.donnees ? formattedData.donnees : formattedData;
+        
+        console.log("🕵️ LE VRAI UTILISATEUR EST :", userData);
+        
+        // 3. On envoie les vraies infos (qui contiennent direct nom et prenom)
         onLoginSuccess(userData); 
       } else {
         // Si l'API renvoie une erreur (ex: 401 Unauthorized)
