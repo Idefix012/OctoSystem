@@ -69,8 +69,8 @@ const SettingsView = () => {
 
         <div className="setting-item">
           <div className="setting-info">
-            <h4>Alerte de remplissage</h4>
-            <p>Recevoir une notification quand la poubelle est pleine à 90%.</p>
+            <h4>Alerte de capacité maximale</h4>
+            <p>Recevoir une notification quand la masse totale approche les 40 kg (limite du capteur).</p>
           </div>
           <label className="switch">
             <input 

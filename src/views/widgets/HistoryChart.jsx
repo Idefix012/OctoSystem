@@ -1,63 +1,40 @@
 // src/views/widgets/HistoryChart.jsx
 import React from 'react';
-// On importe les outils de Chart.js
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
-// On "enregistre" ces outils pour que React puisse les utiliser
-ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-const HistoryChart = () => {
-  // 1. Les données du graphique (plus tard, l'API d'Evan les remplacera)
+// Il accepte maintenant labels et dataPoints
+const HistoryChart = ({ labels, dataPoints }) => {
+  
   const data = {
-    labels: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'], // L'axe X (Jours)
+    labels: labels, // Utilise les jours dynamiques
     datasets: [
       {
         label: 'Masse jetée (kg)',
-        data: [1.2, 1.5, 0.8, 2.1, 1.0, 3.5, 1.2], // L'axe Y (Les valeurs)
-        borderColor: '#4CAF50', // Vert Octo'System
-        backgroundColor: 'rgba(76, 175, 80, 0.2)', // Vert transparent sous la courbe
-        tension: 0.4, // Rend la courbe plus douce/arrondie
-        fill: true, // Remplit le dessous de la courbe
+        data: dataPoints, // Utilise les masses dynamiques
+        borderColor: '#4CAF50',
+        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+        tension: 0.4,
+        fill: true,
       },
     ],
   };
 
-  // 2. Les options de présentation (pour que ce soit joli et responsive)
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false, // Permet au graphique de s'adapter à la taille de la div
-    plugins: {
-      legend: { position: 'top' },
-      title: { display: false }
-    },
-    scales: {
-      y: { beginAtZero: true }
-    }
-  };
+  const options = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, title: { display: false } }, scales: { y: { beginAtZero: true } } };
 
   return (
     <div style={styles.chartContainer}>
-      <h4 style={styles.title}>ÉVOLUTION DE LA SEMAINE</h4>
-      {/* La zone du graphique doit avoir une hauteur définie */}
+      <h4 style={styles.title}>ÉVOLUTION EN TEMPS RÉEL</h4>
       <div style={styles.chartWrapper}>
         <Line data={data} options={options} />
       </div>
     </div>
   );
 };
+
+// ... (Garde exactement tes styles en dessous)
 
 const styles = {
   chartContainer: {

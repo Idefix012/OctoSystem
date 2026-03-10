@@ -1,11 +1,13 @@
 // src/views/widgets/WeightCard.jsx
 import React from 'react';
 
-const WeightCard = ({ weight, date }) => {
+// On ajoute 'title' dans les paramètres
+const WeightCard = ({ title = "DERNIÈRE PESÉE", weight, date }) => {
   return (
     <div style={styles.card}>
       <div style={styles.header}>
-        <h4 style={styles.title}>DERNIÈRE PESÉE</h4>
+        {/* On utilise la variable title ici */}
+        <h4 style={styles.title}>{title}</h4>
         <div style={styles.iconBox}>
             <i className="fa-solid fa-weight-hanging"></i>
         </div>
