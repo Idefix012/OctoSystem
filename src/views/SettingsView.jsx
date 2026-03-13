@@ -1,19 +1,17 @@
 // src/views/SettingsView.jsx
 import React, { useState } from 'react';
 
-const SettingsView = () => {
+// 1. On ajoute la fonction onLogout en paramètre
+const SettingsView = ({ onLogout }) => {
   const [language, setLanguage] = useState('fr');
   const [notifications, setNotifications] = useState(true);
   
-  // 1. On vérifie si le mode sombre est déjà activé
   const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
 
-  // 2. La fonction qui fait la bascule
   const toggleDarkMode = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
     
-    // On ajoute ou on retire la classe sur le body du site
     if (newMode) {
       document.body.classList.add('dark-mode');
     } else {
@@ -55,7 +53,6 @@ const SettingsView = () => {
             <p>Passez l'interface en couleurs sombres pour reposer vos yeux.</p>
           </div>
           <label className="switch">
-            {/* 3. On utilise notre nouvelle fonction ici */}
             <input 
               type="checkbox" 
               checked={darkMode} 
@@ -82,19 +79,48 @@ const SettingsView = () => {
           </label>
         </div>
         
-        <button className="save-btn" onClick={handleSave}>
+        <button className="save-btn" onClick={handleSave} style={{ marginBottom: '20px' }}>
           Sauvegarder les modifications
         </button>
+
+        {/* 2. ZONE DE DÉCONNEXION RAJOUTÉE ICI */}
+        <h3 style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-color)', color: '#e74c3c' }}>
+          Session
+        </h3>
+        <div className="setting-item" style={{ borderBottom: 'none' }}>
+          <div className="setting-info">
+            <h4 style={{ color: '#e74c3c' }}>Déconnexion</h4>
+            <p>Fermer la session actuelle sur cet appareil.</p>
+          </div>
+          <button onClick={onLogout} style={styles.dangerButton}>
+            <i className="fa-solid fa-right-from-bracket"></i> Se déconnecter
+          </button>
+        </div>
+
       </div>
     </div>
   );
 };
 
-// 4. On utilise les variables CSS au lieu du gris et noir en dur
 const styles = {
   container: { padding: '20px', maxWidth: '800px', margin: '0 auto', width: '100%' },
   title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
-  subtitle: { color: 'var(--text-muted)', marginBottom: '30px' }
+  subtitle: { color: 'var(--text-muted)', marginBottom: '30px' },
+  // 3. Style ajouté spécifiquement pour le bouton de déconnexion
+  dangerButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
+    backgroundColor: '#e74c3c',
+    color: 'white',
+    border: 'none',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    fontSize: '0.9rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'background 0.2s'
+  }
 };
 
 export default SettingsView;

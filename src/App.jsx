@@ -15,31 +15,44 @@ import LoginView from './views/LoginView';
 function App() {
   const { isSidebarOpen, toggleMenu, closeMenu, menuItems } = useLayoutController();
   
-  // L'état qui mémorise toutes les infos de l'utilisateur une fois connecté
-  const [currentUser, setCurrentUser] = useState(null);
+  // 1. Initialisation intelligente : on lit le localStorage au démarrage
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('octo_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
-  // Si l'utilisateur n'est pas connecté, on le bloque sur la page de Login
+  // 2. Fonction de déconnexion
+  const handleLogout = () => {
+    localStorage.removeItem('octo_user');
+    localStorage.removeItem('octo_token');
+    setCurrentUser(null); // Ça va automatiquement réafficher l'écran de Login
+  };
+
   if (!currentUser) {
     return <LoginView onLoginSuccess={(userData) => setCurrentUser(userData)} />;
   }
 
-  // S'il EST connecté, on affiche l'application complète
   return (
     <Router>
       <div className="app-container">
         
-        <SidebarView isOpen={isSidebarOpen} onClose={closeMenu} menuItems={menuItems} />
+        {/* 3. On envoie la fonction de déconnexion à la Sidebar */}
+        <SidebarView 
+          isOpen={isSidebarOpen} 
+          onClose={closeMenu} 
+          menuItems={menuItems} 
+          
+        />
 
         <div className="main-content">
           <HeaderView onToggleMenu={toggleMenu} user={currentUser} />
           
           <main>
             <Routes>
-              {/* On passe les données de l'utilisateur au Dashboard via une "prop" */}
               <Route path="/" element={<DashboardView user={currentUser} />} />
               <Route path="/history" element={<HistoryView />} />
               <Route path="/community" element={<CommunityView />} />
-              <Route path="/settings" element={<SettingsView />} />
+              <Route path="/settings" element={<SettingsView onLogout={handleLogout} />} />
             </Routes>
           </main>
         </div>
