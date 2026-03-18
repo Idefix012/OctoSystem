@@ -49,11 +49,12 @@ function App() {
           
           <main>
             <Routes>
-              <Route path="/" element={<DashboardView user={currentUser} />} />
-              <Route path="/history" element={<HistoryView />} />
-              <Route path="/community" element={<CommunityView />} />
-              <Route path="/settings" element={<SettingsView onLogout={handleLogout} />} />
-            </Routes>
+  <Route path="/" element={<DashboardView user={currentUser} />} />
+  <Route path="/history" element={<HistoryView />} />
+  {/* On ajoute user={currentUser} ici ! */}
+  <Route path="/community" element={<CommunityView user={currentUser} />} />
+  <Route path="/settings" element={<SettingsView onLogout={handleLogout} user={currentUser} />} />
+</Routes>
           </main>
         </div>
 

@@ -285,6 +285,23 @@ input:checked + .slider:before { transform: translateX(22px); }
   border: 1px solid #e74c3c;
 }
 
+/* --- SKELETON LOADERS --- */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-main) 25%, var(--border-color) 50%, var(--bg-main) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite linear;
+  border-radius: 16px; /* Même arrondi que tes widgets */
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-card { height: 165px; width: 100%; }
+.skeleton-doughnut { height: 250px; width: 100%; }
+.skeleton-chart { height: 350px; width: 100%; }
+
 /* --- RESPONSIVE MOBILE (< 768px) --- */
 @media (max-width: 768px) {
   .app-container { flex-direction: column; }

@@ -5,6 +5,9 @@ import HistoryChart from './widgets/HistoryChart';
 import GoalChart from './widgets/GoalChart'; 
 
 const DashboardView = ({ user }) => {
+  // NOUVEAU : État de chargement initial
+  const [isLoading, setIsLoading] = useState(true);
+
   const [latestMass, setLatestMass] = useState(0);
   const [totalMass, setTotalMass] = useState(0); 
   const [latestDate, setLatestDate] = useState("Chargement...");
@@ -15,10 +18,6 @@ const DashboardView = ({ user }) => {
   const MAX_CAPACITY = 40;
   const ALERT_THRESHOLD = 36; 
 
-// ==========================================
-  // RÉCUPÉRATION DES DONNÉES DE L'API (GET)
-  // ==========================================
-  // Fonction pour calculer la date du jour au format YYYY-MM-DD exigé par l'API
   const getTodayString = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -27,12 +26,6 @@ const DashboardView = ({ user }) => {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // ==========================================
-  // RÉCUPÉRATION DES DONNÉES DE L'API (GET)
-  // ==========================================
-  // ==========================================
-  // RÉCUPÉRATION DES DONNÉES DE L'API (GET)
-  // ==========================================
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -53,40 +46,28 @@ const DashboardView = ({ user }) => {
           const donnees = await response.json();
           
           if (Array.isArray(donnees) && donnees.length > 0) {
-            
-            // 1. MASSE TOTALE (Remplissage physique actuel)
-            // C'est la toute dernière valeur enregistrée en base (Index 0 car DESC)
             const poidsPhysiqueKg = parseFloat(donnees[0].poids) / 1000;
             setTotalMass(parseFloat(poidsPhysiqueKg.toFixed(2)));
 
-            // 2. CALCUL DU DERNIER JET (Algorithme de Différentiel)
             let dernierJetKg = 0;
-
             if (donnees.length === 1) {
-              // S'il n'y a qu'une seule donnée, le jet est égal au poids total
               dernierJetKg = poidsPhysiqueKg;
             } else {
-              // On parcourt le tableau pour trouver la dernière AUGMENTATION de poids
-              // On compare l'élément [i] avec l'élément suivant [i+1] (le plus ancien)
               for (let i = 0; i < donnees.length - 1; i++) {
                 const actuel = parseFloat(donnees[i].poids);
                 const precedent = parseFloat(donnees[i+1].poids);
-                
                 if (actuel > precedent) {
-                  // On a trouvé un ajout ! On calcule la différence
                   dernierJetKg = (actuel - precedent) / 1000;
-                  break; // On s'arrête dès qu'on a trouvé le dernier jet réel
+                  break; 
                 }
               }
             }
             setLatestMass(parseFloat(dernierJetKg.toFixed(3)));
 
-            // 3. MISE À JOUR DE L'HEURE ET DE LA DATE
             const dateObj = new Date(donnees[0].date);
             const heure = `${dateObj.getHours()}h${dateObj.getMinutes().toString().padStart(2, '0')}`;
             setLatestDate(`Aujourd'hui à ${heure}`);
 
-            // 4. PRÉPARATION DU GRAPHIQUE (Ordre chronologique)
             const donneesChronologiques = [...donnees].reverse();
             setChartLabels(donneesChronologiques.map(item => {
               const d = new Date(item.date);
@@ -95,7 +76,6 @@ const DashboardView = ({ user }) => {
             setChartData(donneesChronologiques.map(item => parseFloat(item.poids) / 1000));
             
           } else {
-            // Cas tableau vide
             setLatestDate("Poubelle vide aujourd'hui");
             setLatestMass(0);
             setTotalMass(0);
@@ -103,7 +83,6 @@ const DashboardView = ({ user }) => {
             setChartData([]);
           }
         } else if (response.status === 404) {
-          // Gestion du 404 (aucune donnée pour cette date)
           setLatestDate("Poubelle vide aujourd'hui");
           setLatestMass(0);
           setTotalMass(0);
@@ -112,21 +91,18 @@ const DashboardView = ({ user }) => {
         }
       } catch (err) {
         console.error("Erreur Polling Dashboard :", err);
+      } finally {
+        // NOUVEAU : On arrête le Skeleton Loader dès que la requête est terminée (succès ou échec)
+        setIsLoading(false);
       }
     };
 
-    // Lancement immédiat au montage
     fetchDashboardData();
-
-    // Mise en place du polling (5 secondes)
     const intervalId = setInterval(fetchDashboardData, 5000);
-
-    // Nettoyage à la fermeture du composant
     return () => clearInterval(intervalId);
 
-  }, []); // Dépendances vides pour ne l'exécuter qu'une fois au montage
+  }, []);
 
-  // Le reste reste inchangé pour l'instant (ajout visuel de démo)
   const simulateDrop = async () => {
     const newMass = parseFloat((Math.random() * 2.4 + 0.1).toFixed(2));
     setLatestMass(newMass);
@@ -146,7 +122,7 @@ const DashboardView = ({ user }) => {
 
   return (
     <div style={styles.dashboard}>
-      {totalMass >= ALERT_THRESHOLD && (
+      {totalMass >= ALERT_THRESHOLD && !isLoading && (
         <div className="toast-alert">
           <i className="fa-solid fa-triangle-exclamation" style={{fontSize: '1.5rem'}}></i>
           <div>
@@ -163,23 +139,38 @@ const DashboardView = ({ user }) => {
         </div>
         
         <div className="action-buttons">
-            <button onClick={emptyBin} className="danger-btn">
+            <button onClick={emptyBin} className="danger-btn" disabled={isLoading}>
               <i className="fa-solid fa-trash-can"></i> Vider la poubelle
             </button>
-            <button onClick={simulateDrop} style={styles.simulateBtn}>
+            <button onClick={simulateDrop} style={styles.simulateBtn} disabled={isLoading}>
               <i className="fa-solid fa-plus"></i> Simuler un jet
             </button>
         </div>
       </div>
 
       <div style={styles.topGrid}>
-        <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
-        <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
-        <GoalChart currentMass={totalMass} maxCapacity={MAX_CAPACITY} />
+        {/* NOUVEAU : Affichage conditionnel des Skeletons ou des vrais widgets */}
+        {isLoading ? (
+          <>
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-doughnut"></div>
+          </>
+        ) : (
+          <>
+            <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
+            <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
+            <GoalChart currentMass={totalMass} maxCapacity={MAX_CAPACITY} />
+          </>
+        )}
       </div>
 
       <div style={styles.bottomGrid}>
-        <HistoryChart labels={chartLabels} dataPoints={chartData} />
+        {isLoading ? (
+          <div className="skeleton skeleton-chart"></div>
+        ) : (
+          <HistoryChart labels={chartLabels} dataPoints={chartData} />
+        )}
       </div>
 
     </div>
