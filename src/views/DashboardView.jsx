@@ -30,6 +30,9 @@ const DashboardView = ({ user }) => {
   // ==========================================
   // RÉCUPÉRATION DES DONNÉES DE L'API (GET)
   // ==========================================
+  // ==========================================
+  // RÉCUPÉRATION DES DONNÉES DE L'API (GET)
+  // ==========================================
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -50,28 +53,40 @@ const DashboardView = ({ user }) => {
           const donnees = await response.json();
           
           if (Array.isArray(donnees) && donnees.length > 0) {
-            // 1. On récupère la pesée la plus récente
-            const dernierePesee = donnees[0];
-            const poidsActuelKg = parseFloat(dernierePesee.poids) / 1000;
             
-            // Mise à jour de la carte "Dernière Masse"
-            setLatestMass(poidsActuelKg);
-            
-            // 2. LOGIQUE DE REMPLISSAGE (Masse Totale)
-            // Si le poids actuel est 0, cela signifie que la poubelle est vide.
-            // Sinon, la masse totale affichée correspond au poids actuel dans la poubelle.
-            if (poidsActuelKg === 0) {
-              setTotalMass(0);
-            } else {
-              setTotalMass(parseFloat(poidsActuelKg.toFixed(2)));
-            }
+            // 1. MASSE TOTALE (Remplissage physique actuel)
+            // C'est la toute dernière valeur enregistrée en base (Index 0 car DESC)
+            const poidsPhysiqueKg = parseFloat(donnees[0].poids) / 1000;
+            setTotalMass(parseFloat(poidsPhysiqueKg.toFixed(2)));
 
-            // 3. Mise à jour de l'heure
-            const dateObj = new Date(dernierePesee.date);
+            // 2. CALCUL DU DERNIER JET (Algorithme de Différentiel)
+            let dernierJetKg = 0;
+
+            if (donnees.length === 1) {
+              // S'il n'y a qu'une seule donnée, le jet est égal au poids total
+              dernierJetKg = poidsPhysiqueKg;
+            } else {
+              // On parcourt le tableau pour trouver la dernière AUGMENTATION de poids
+              // On compare l'élément [i] avec l'élément suivant [i+1] (le plus ancien)
+              for (let i = 0; i < donnees.length - 1; i++) {
+                const actuel = parseFloat(donnees[i].poids);
+                const precedent = parseFloat(donnees[i+1].poids);
+                
+                if (actuel > precedent) {
+                  // On a trouvé un ajout ! On calcule la différence
+                  dernierJetKg = (actuel - precedent) / 1000;
+                  break; // On s'arrête dès qu'on a trouvé le dernier jet réel
+                }
+              }
+            }
+            setLatestMass(parseFloat(dernierJetKg.toFixed(3)));
+
+            // 3. MISE À JOUR DE L'HEURE ET DE LA DATE
+            const dateObj = new Date(donnees[0].date);
             const heure = `${dateObj.getHours()}h${dateObj.getMinutes().toString().padStart(2, '0')}`;
             setLatestDate(`Aujourd'hui à ${heure}`);
 
-            // 4. Préparation du graphique
+            // 4. PRÉPARATION DU GRAPHIQUE (Ordre chronologique)
             const donneesChronologiques = [...donnees].reverse();
             setChartLabels(donneesChronologiques.map(item => {
               const d = new Date(item.date);
@@ -80,7 +95,7 @@ const DashboardView = ({ user }) => {
             setChartData(donneesChronologiques.map(item => parseFloat(item.poids) / 1000));
             
           } else {
-            // Cas où le tableau est vide (pas de données du tout)
+            // Cas tableau vide
             setLatestDate("Poubelle vide aujourd'hui");
             setLatestMass(0);
             setTotalMass(0);
@@ -88,7 +103,7 @@ const DashboardView = ({ user }) => {
             setChartData([]);
           }
         } else if (response.status === 404) {
-          // Gestion du cas où aucune donnée n'existe pour aujourd'hui
+          // Gestion du 404 (aucune donnée pour cette date)
           setLatestDate("Poubelle vide aujourd'hui");
           setLatestMass(0);
           setTotalMass(0);
@@ -96,22 +111,20 @@ const DashboardView = ({ user }) => {
           setChartData([]);
         }
       } catch (err) {
-        console.error("Erreur réseau silencieuse (Polling) :", err);
+        console.error("Erreur Polling Dashboard :", err);
       }
     };
 
-    // Premier appel immédiat
+    // Lancement immédiat au montage
     fetchDashboardData();
 
-    // Polling toutes les 5 secondes
-    const intervalId = setInterval(() => {
-      fetchDashboardData();
-    }, 5000);
+    // Mise en place du polling (5 secondes)
+    const intervalId = setInterval(fetchDashboardData, 5000);
 
     // Nettoyage à la fermeture du composant
     return () => clearInterval(intervalId);
 
-  }, []);
+  }, []); // Dépendances vides pour ne l'exécuter qu'une fois au montage
 
   // Le reste reste inchangé pour l'instant (ajout visuel de démo)
   const simulateDrop = async () => {
