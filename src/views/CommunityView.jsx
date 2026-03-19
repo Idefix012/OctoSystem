@@ -9,45 +9,56 @@ const CommunityView = ({ user }) => {
   const [searchCode, setSearchCode] = useState('');
 
   // ==========================================
-  // RÉCUPÉRATION DES DEMANDES (GET - pluriel)
+  // FONCTION : Obtenir le mois actuel
+  // ==========================================
+  const getNomDuMois = () => {
+    const mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+    return mois[new Date().getMonth()];
+  };
+
+  // Calcul du pire pollueur pour définir le 100% de la jauge
+  const maxWeight = leaderboard.length > 0 ? Math.max(...leaderboard.map(p => p.totalKg)) : 1;
+  const safeMaxWeight = maxWeight > 0 ? maxWeight : 1;
+
+  // ==========================================
+  // RÉCUPÉRATION DES DONNÉES (GET)
   // ==========================================
   useEffect(() => {
-    // Faux classement en attendant la route d'Evan
-    const fakeLeaderboard = [
-      { id: 2, prenom: "Evan", totalKg: 15.2, isMe: false },
-      { id: user?.id_user || 1, prenom: user ? user.prenom : "Moi", totalKg: 18.5, isMe: true },
-      { id: 3, prenom: "Alice", totalKg: 22.1, isMe: false }
-    ];
-    setLeaderboard(fakeLeaderboard);
-
-    const fetchDemandes = async () => {
+    const fetchDonneesCommunaute = async () => {
       try {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
 
-        // On interroge la route GET en PLURIEL
-        const response = await fetch(`http://192.168.1.143:5000/amis/demandes`, {
+        // 1. Invitations en attente
+        const repDemandes = await fetch(`http://192.168.1.143:5000/amis/demandes`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          
-          // CORRECTION ICI : On cible "data.demandes" (le tableau) au lieu de "data" (l'objet complet)
-          // On rajoute "|| []" par sécurité au cas où l'API renvoie vide
-          setPendingRequests(data.demandes || []); 
+        if (repDemandes.ok) {
+          const dataDemandes = await repDemandes.json();
+          setPendingRequests(dataDemandes.demandes || []); 
         }
+
+        // 2. Classement des amis (la route d'Evan)
+        const repListe = await fetch(`http://192.168.1.143:5000/amis`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (repListe.ok) {
+          const dataListe = await repListe.json();
+          setLeaderboard(dataListe || []);
+        }
+
       } catch (err) {
-        console.error("Erreur récupération des demandes :", err);
+        console.error("Erreur réseau Communauté :", err);
       }
     };
 
-    fetchDemandes();
+    fetchDonneesCommunaute();
   }, [user]);
 
   // ==========================================
-  // ENVOYER UNE DEMANDE (POST - singulier)
+  // ENVOYER UNE DEMANDE (POST)
   // ==========================================
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
@@ -71,7 +82,6 @@ const CommunityView = ({ user }) => {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
-      // On interroge la route POST en SINGULIER
       const response = await fetch(`http://192.168.1.143:5000/amis/demande`, {
         method: 'POST',
         headers: { 
@@ -96,14 +106,13 @@ const CommunityView = ({ user }) => {
   };
 
   // ==========================================
-  // ACCEPTER / REFUSER UNE DEMANDE (POST - gestion)
+  // ACCEPTER / REFUSER UNE DEMANDE (POST)
   // ==========================================
   const handleReponse = async (friendCode, action) => {
     try {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
-      // Nouvelle route "gestion" d'Evan (POST)
       const response = await fetch(`http://192.168.1.143:5000/amis/gestion`, {
         method: 'POST',
         headers: { 
@@ -114,9 +123,42 @@ const CommunityView = ({ user }) => {
       });
 
       if (response.ok) {
-        // Mise à jour de l'affichage local si succès
         setPendingRequests(pendingRequests.filter(req => req.friend_code !== friendCode));
         alert(action === 'accepter' ? "Nouvel ami ajouté à votre réseau !" : "Demande refusée.");
+        if(action === 'accepter') window.location.reload();
+      } else {
+        const data = await response.json();
+        alert(`Erreur : ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      alert("Impossible de joindre le serveur.");
+    }
+  };
+
+  // ==========================================
+  // SUPPRIMER UN AMI (POST)
+  // ==========================================
+  const handleDeleteFriend = async (friendCode) => {
+    if (!window.confirm("Voulez-vous vraiment supprimer cet ami de votre réseau ?")) return;
+
+    try {
+      const token = localStorage.getItem('octo_token');
+      if (!token) return;
+
+      const response = await fetch(`http://192.168.1.143:5000/amis/supprimer`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ friend_code: friendCode })
+      });
+
+      if (response.ok) {
+        // Mise à jour instantanée de l'interface (retire l'ami du podium et de la liste)
+        setLeaderboard(leaderboard.filter(person => person.friend_code !== friendCode));
+        alert("Ami retiré avec succès.");
       } else {
         const data = await response.json();
         alert(`Erreur : ${data.error}`);
@@ -136,10 +178,13 @@ const CommunityView = ({ user }) => {
 
       <div style={styles.tabMenu}>
         <button style={activeTab === 'leaderboard' ? styles.tabActive : styles.tab} onClick={() => setActiveTab('leaderboard')}>
-          <i className="fa-solid fa-trophy"></i> Classement
+          <i className="fa-solid fa-trophy"></i> Podium
+        </button>
+        <button style={activeTab === 'friends' ? styles.tabActive : styles.tab} onClick={() => setActiveTab('friends')}>
+          <i className="fa-solid fa-user-group"></i> Mes Amis
         </button>
         <button style={activeTab === 'add' ? styles.tabActive : styles.tab} onClick={() => setActiveTab('add')}>
-          <i className="fa-solid fa-user-plus"></i> Ajouter un ami
+          <i className="fa-solid fa-user-plus"></i> Ajouter
         </button>
         <button style={activeTab === 'requests' ? styles.tabActive : styles.tab} onClick={() => setActiveTab('requests')}>
           <i className="fa-solid fa-bell"></i> Demandes 
@@ -149,22 +194,72 @@ const CommunityView = ({ user }) => {
 
       <div style={styles.contentCard}>
         
-        {/* ONGLET 1 : CLASSEMENT */}
+        {/* ONGLET 1 : CLASSEMENT GAMIFIÉ */}
         {activeTab === 'leaderboard' && (
           <div>
-            <h2 style={styles.sectionTitle}>Podium du mois</h2>
+            <h2 style={styles.sectionTitle}>Podium de {getNomDuMois()}</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
+              Celui qui a la barre la plus courte est le plus écologique ! 🌱
+            </p>
+
             {leaderboard.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Vous n'avez pas encore d'amis pour comparer.</p>
+              <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Chargement des données...</p>
             ) : (
-              leaderboard.map((person, index) => (
-                <div key={person.id} style={{...styles.listItem, backgroundColor: person.isMe ? 'var(--bg-main)' : 'transparent', borderLeft: person.isMe ? '4px solid var(--primary)' : '4px solid transparent'}}>
+              leaderboard.map((person, index) => {
+                const percent = (person.totalKg / safeMaxWeight) * 100;
+                
+                let barColor = '#2ecc71'; 
+                if (index === leaderboard.length - 1 && leaderboard.length > 1 && person.totalKg > 0) {
+                  barColor = '#e74c3c'; 
+                } else if (index > 0 && person.totalKg > 0) {
+                  barColor = '#f39c12'; 
+                }
+
+                return (
+                  <div key={person.id_user} style={{...styles.listItem, flexDirection: 'column', alignItems: 'stretch', backgroundColor: person.isMe ? 'var(--bg-main)' : 'transparent', borderLeft: person.isMe ? '4px solid var(--primary)' : '4px solid transparent'}}>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: '10px' }}>
+                      <div style={styles.rankCircle}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                      </div>
+                      <div style={{ flex: 1, marginLeft: '15px' }}>
+                        <strong>{person.prenom} {person.nom} {person.isMe && '(Vous)'}</strong>
+                      </div>
+                      <div style={{...styles.scoreBadge, backgroundColor: barColor}}>{person.totalKg} kg</div>
+                    </div>
+
+                    <div style={styles.barTrack}>
+                      <div style={{...styles.barFill, width: `${percent}%`, backgroundColor: barColor}}></div>
+                    </div>
+
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* ONGLET 1.5 : LISTE DES AMIS */}
+        {activeTab === 'friends' && (
+          <div>
+            <h2 style={styles.sectionTitle}>Ma liste d'amis</h2>
+            
+            {/* On filtre rigoureusement pour cacher notre propre code ami */}
+            {leaderboard.filter(p => p.friend_code !== user?.friend_code).length === 0 ? (
+              <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Vous n'avez pas encore d'amis dans votre réseau.</p>
+            ) : (
+              leaderboard.filter(p => p.friend_code !== user?.friend_code).map(person => (
+                <div key={person.id_user} style={styles.listItem}>
                   <div style={styles.rankCircle}>
-                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                    <i className="fa-solid fa-user"></i>
                   </div>
                   <div style={{ flex: 1, marginLeft: '15px' }}>
-                    <strong>{person.prenom} {person.isMe && '(Vous)'}</strong>
+                    <strong>{person.prenom} {person.nom}</strong> 
+                    <div style={{color: 'var(--text-muted)', fontSize: '0.85rem'}}>Code : {person.friend_code}</div>
                   </div>
-                  <div style={styles.scoreBadge}>{person.totalKg} kg</div>
+                  <button onClick={() => handleDeleteFriend(person.friend_code)} style={styles.deleteBtn} title="Supprimer cet ami">
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
                 </div>
               ))
             )}
@@ -256,7 +351,10 @@ const styles = {
   input: { flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-main)', color: 'var(--text-main)', fontSize: '1.1rem', letterSpacing: '1px', textTransform: 'uppercase' },
   submitBtn: { padding: '12px 20px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' },
   acceptBtn: { background: '#2ecc71', color: 'white', border: 'none', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer' },
-  declineBtn: { background: '#e74c3c', color: 'white', border: 'none', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer' }
+  declineBtn: { background: '#e74c3c', color: 'white', border: 'none', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer' },
+  deleteBtn: { background: '#e74c3c', color: 'white', border: 'none', width: '35px', height: '35px', borderRadius: '8px', cursor: 'pointer', transition: '0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  barTrack: { width: '100%', height: '8px', backgroundColor: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: '4px', transition: 'width 1s ease-in-out, background-color 0.5s' }
 };
 
 export default CommunityView;

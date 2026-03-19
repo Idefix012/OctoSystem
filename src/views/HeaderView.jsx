@@ -1,11 +1,11 @@
 // src/views/HeaderView.jsx
 import React from 'react';
+import { useNavigate } from 'react-router-dom'; // 1. On importe le système de navigation
 
 const HeaderView = ({ onToggleMenu, user }) => {
+  const navigate = useNavigate(); // 2. On initialise la fonction de navigation
   
   // LOGIQUE SÉCURISÉE : 
-  // On vérifie que 'user' existe, ET que 'user.prenom' existe, ET que 'user.nom' existe.
-  // Sinon, on met le petit bonhomme par défaut.
   const initials = (user && user.prenom && user.nom)
     ? `${user.prenom.charAt(0)}${user.nom.charAt(0)}`.toUpperCase() 
     : '👤';
@@ -15,6 +15,11 @@ const HeaderView = ({ onToggleMenu, user }) => {
     ? `${user.prenom} ${user.nom}` 
     : 'Profil';
 
+  // 3. Fonction qui se déclenche au clic sur l'avatar
+  const goToProfile = () => {
+    navigate('/settings'); // Redirige vers ta route des paramètres
+  };
+
   return (
     <header style={styles.header}>
       <div className="burger-menu" onClick={onToggleMenu}>
@@ -23,7 +28,8 @@ const HeaderView = ({ onToggleMenu, user }) => {
       
       <h2 style={styles.title}>Octo'System</h2>
       
-      <div style={styles.avatar} title={titleName}>
+      {/* 4. On ajoute le onClick sur la div de l'avatar */}
+      <div style={styles.avatar} title={titleName} onClick={goToProfile}>
         {initials}
       </div>
     </header>
@@ -52,7 +58,8 @@ const styles = {
     display: 'grid', 
     placeItems: 'center', 
     fontWeight: 'bold', 
-    cursor: 'pointer' 
+    cursor: 'pointer',
+    transition: 'transform 0.2s ease-in-out' // Petit bonus : animation au survol possible en CSS
   }
 };
 
