@@ -1,5 +1,6 @@
 // src/views/CommunityView.jsx
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify'; // Import de la fonction toast
 
 const CommunityView = ({ user }) => {
   const [activeTab, setActiveTab] = useState('leaderboard');
@@ -53,7 +54,7 @@ const CommunityView = ({ user }) => {
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
     navigator.clipboard.writeText(code);
-    alert(`Code ${code} copié dans le presse-papier !`);
+    toast.info(`Code ami ${code} copié dans le presse-papier !`); // Remplacé
   };
 
   const handleSendRequest = async (e) => {
@@ -61,7 +62,7 @@ const CommunityView = ({ user }) => {
     if (!searchCode) return;
     const codeAmiFormate = searchCode.toUpperCase();
     if (codeAmiFormate === user?.friend_code) {
-      alert("Vous ne pouvez pas vous ajouter vous-même !");
+      toast.warning("Vous ne pouvez pas vous ajouter vous-même !"); // Remplacé
       setSearchCode('');
       return;
     }
@@ -75,13 +76,13 @@ const CommunityView = ({ user }) => {
       });
       const data = await response.json();
       if (response.ok) {
-        alert("Demande d'ami envoyée avec succès !");
+        toast.success("Demande d'ami envoyée avec succès !"); // Remplacé
         setSearchCode(''); 
       } else {
-        alert(`Erreur : ${data.error}`);
+        toast.error(`Erreur : ${data.error}`); // Remplacé
       }
     } catch (err) {
-      alert("Impossible de joindre le serveur.");
+      toast.error("Impossible de joindre le serveur."); // Remplacé
     }
   };
 
@@ -95,14 +96,18 @@ const CommunityView = ({ user }) => {
       });
       if (response.ok) {
         setPendingRequests(pendingRequests.filter(req => req.friend_code !== friendCode));
-        alert(action === 'accepter' ? "Nouvel ami ajouté à votre réseau !" : "Demande refusée.");
-        if(action === 'accepter') window.location.reload();
+        if (action === 'accepter') {
+            toast.success("Nouvel ami ajouté à votre réseau !"); // Remplacé
+            window.location.reload();
+        } else {
+            toast.info("Demande refusée."); // Remplacé
+        }
       } else {
         const data = await response.json();
-        alert(`Erreur : ${data.error}`);
+        toast.error(`Erreur : ${data.error}`); // Remplacé
       }
     } catch (err) {
-      alert("Impossible de joindre le serveur.");
+      toast.error("Impossible de joindre le serveur."); // Remplacé
     }
   };
 
@@ -117,7 +122,7 @@ const CommunityView = ({ user }) => {
       });
       if (response.ok) {
         setLeaderboard(leaderboard.filter(person => person.friend_code !== friendCode));
-        alert("Ami retiré avec succès.");
+        toast.success("Ami retiré avec succès."); // Remplacé
       }
     } catch (err) {}
   };
@@ -134,7 +139,7 @@ const CommunityView = ({ user }) => {
       if (response.ok) {
         setLeaderboard(leaderboard.filter(person => person.friend_code !== friendCode));
         setPendingRequests(pendingRequests.filter(req => req.friend_code !== friendCode));
-        alert("Utilisateur bloqué avec succès.");
+        toast.success("Utilisateur bloqué avec succès."); // Remplacé
       }
     } catch (err) {
       console.error("Erreur lors du blocage :", err);
@@ -167,7 +172,7 @@ const CommunityView = ({ user }) => {
       });
       if (response.ok) {
         setBlockedList(blockedList.filter(person => person.friend_code !== friendCode));
-        alert("Utilisateur débloqué.");
+        toast.success("Utilisateur débloqué."); // Remplacé
       }
     } catch (err) {}
   };
