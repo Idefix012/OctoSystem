@@ -1,5 +1,6 @@
 // src/views/LoginView.jsx
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify'; // 1. On importe les Toasts !
 
 const LoginView = ({ onLoginSuccess }) => {
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -16,8 +17,6 @@ const LoginView = ({ onLoginSuccess }) => {
   const [isSearchingCommune, setIsSearchingCommune] = useState(false); 
   const [showDropdown, setShowDropdown] = useState(false); 
   
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // ==========================================
@@ -54,9 +53,7 @@ const LoginView = ({ onLoginSuccess }) => {
   // SÉLECTION D'UNE COMMUNE DANS LA LISTE
   // ==========================================
   const handleSelectCommune = (commune) => {
-    // L'API d'Evan renvoie "nom" et "id_commune"
     const nomVille = commune.nom || commune.nom_commune || "Ville inconnue";
-    
     setSearchCommune(nomVille); 
     setShowDropdown(false); 
     setCommuneResults([]);
@@ -64,8 +61,6 @@ const LoginView = ({ onLoginSuccess }) => {
 
   const toggleMode = () => {
     setIsLoginMode(!isLoginMode);
-    setError('');
-    setSuccessMsg('');
     setEmail('');
     setPassword('');
     setNom('');
@@ -77,8 +72,6 @@ const LoginView = ({ onLoginSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
-    setSuccessMsg('');
 
     const cleanEmail = email.trim().toLowerCase();
 
@@ -95,17 +88,15 @@ const LoginView = ({ onLoginSuccess }) => {
         
         if (response.ok) {
           const rawData = await response.json();
-          // L'API d'Evan renvoie : { donnees: {...}, token: "..." }
           const userData = rawData.donnees;
           
-          // Optionnel pour plus tard : stocker le token
-          // localStorage.setItem('token', rawData.token);
           localStorage.setItem('octo_user', JSON.stringify(userData));
           localStorage.setItem('octo_token', rawData.token);
 
+          toast.success(`Ravi de vous revoir, ${userData.prenom} !`); // Toast de succès
           onLoginSuccess(userData); 
         } else {
-          setError("Identifiants incorrects.");
+          toast.error("Identifiants incorrects."); // Toast d'erreur
         }
 
       } else {
@@ -113,7 +104,7 @@ const LoginView = ({ onLoginSuccess }) => {
         // MODE INSCRIPTION
         // ==========================================
         if (!searchCommune) {
-          setError("Veuillez sélectionner une commune.");
+          toast.warning("Veuillez sélectionner une commune."); // Toast d'avertissement
           setIsLoading(false);
           return;
         }
@@ -126,26 +117,23 @@ const LoginView = ({ onLoginSuccess }) => {
             prenom: prenom.trim(),
             email: cleanEmail, 
             mot_de_passe: password,
-            // CORRECTION ICI : Evan attend le texte sous la clé 'commune'
             commune: searchCommune.trim() 
           })
         });
 
         if (response.ok) {
-          setSuccessMsg("Compte créé avec succès ! Vous pouvez maintenant vous connecter.");
+          toast.success("Compte créé avec succès ! Vous pouvez vous connecter."); // Toast de succès
           setTimeout(() => {
             setIsLoginMode(true);
-            setSuccessMsg('');
           }, 2000);
         } else {
-          // L'API d'Evan peut renvoyer un message d'erreur précis
           const errorData = await response.json();
-          setError(errorData.error || "Erreur lors de la création du compte.");
+          toast.error(errorData.error || "Erreur lors de la création du compte."); // Toast d'erreur
         }
       }
     } catch (err) {
       console.error(err);
-      setError("Erreur réseau : Impossible de joindre l'API d'Evan.");
+      toast.error("Erreur réseau : Impossible de joindre l'API."); // Toast d'erreur critique
     } finally {
       setIsLoading(false);
     }
@@ -160,14 +148,6 @@ const LoginView = ({ onLoginSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
-          {error && <div className="error-message">{error}</div>}
-          
-          {successMsg && (
-            <div style={{ backgroundColor: '#E8F5E9', color: '#4CAF50', padding: '10px', borderRadius: '8px', border: '1px solid #4CAF50', textAlign: 'center', fontSize: '0.9rem' }}>
-              {successMsg}
-            </div>
-          )}
-
           {!isLoginMode && (
             <>
               <div className="input-group">
@@ -209,7 +189,6 @@ const LoginView = ({ onLoginSuccess }) => {
                         style={styles.dropdownItem}
                         onClick={() => handleSelectCommune(commune)}
                       >
-                        {/* On affiche le nom tel qu'il est renvoyé par le code Python */}
                         {commune.nom || commune.nom_commune}
                       </li>
                     ))}

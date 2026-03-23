@@ -30,46 +30,47 @@ function App() {
     setCurrentUser(null);
   };
 
-  if (!currentUser) {
-    return <LoginView onLoginSuccess={(userData) => setCurrentUser(userData)} />;
-  }
-
   return (
-    <Router>
-      <div className="app-container">
-        
-        {/* LE CONTENEUR DES NOTIFICATIONS */}
-        <ToastContainer 
-          position="top-right" 
-          autoClose={3000} 
-          hideProgressBar={false}
-          newestOnTop={true}
-          closeOnClick
-          pauseOnHover
-          theme="colored"
-        />
+    <>
+      {/* LE CONTENEUR DES NOTIFICATIONS (Placé tout en haut pour fonctionner partout !) */}
+      <ToastContainer 
+        position="top-right" 
+        autoClose={3000} 
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        pauseOnHover
+        theme="colored"
+      />
 
-        <SidebarView 
-          isOpen={isSidebarOpen} 
-          onClose={closeMenu} 
-          menuItems={menuItems} 
-        />
+      {/* GESTION DE L'AFFICHAGE (Connecté ou non) */}
+      {!currentUser ? (
+        <LoginView onLoginSuccess={(userData) => setCurrentUser(userData)} />
+      ) : (
+        <Router>
+          <div className="app-container">
+            <SidebarView 
+              isOpen={isSidebarOpen} 
+              onClose={closeMenu} 
+              menuItems={menuItems} 
+            />
 
-        <div className="main-content">
-          <HeaderView onToggleMenu={toggleMenu} user={currentUser} />
-          
-          <main>
-            <Routes>
-              <Route path="/" element={<DashboardView user={currentUser} />} />
-              <Route path="/history" element={<HistoryView />} />
-              <Route path="/community" element={<CommunityView user={currentUser} />} />
-              <Route path="/settings" element={<SettingsView onLogout={handleLogout} user={currentUser} />} />
-            </Routes>
-          </main>
-        </div>
-
-      </div>
-    </Router>
+            <div className="main-content">
+              <HeaderView onToggleMenu={toggleMenu} user={currentUser} />
+              
+              <main>
+                <Routes>
+                  <Route path="/" element={<DashboardView user={currentUser} />} />
+                  <Route path="/history" element={<HistoryView />} />
+                  <Route path="/community" element={<CommunityView user={currentUser} />} />
+                  <Route path="/settings" element={<SettingsView onLogout={handleLogout} user={currentUser} />} />
+                </Routes>
+              </main>
+            </div>
+          </div>
+        </Router>
+      )}
+    </>
   );
 }
 

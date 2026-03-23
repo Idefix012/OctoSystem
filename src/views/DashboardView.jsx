@@ -5,7 +5,6 @@ import HistoryChart from './widgets/HistoryChart';
 import GoalChart from './widgets/GoalChart'; 
 
 const DashboardView = ({ user }) => {
-  // NOUVEAU : État de chargement initial
   const [isLoading, setIsLoading] = useState(true);
 
   const [latestMass, setLatestMass] = useState(0);
@@ -14,6 +13,9 @@ const DashboardView = ({ user }) => {
   
   const [chartLabels, setChartLabels] = useState([]);
   const [chartData, setChartData] = useState([]);
+
+  // NOUVEAU : État pour stocker le classement du mois
+  const [statsMois, setStatsMois] = useState({ totalKg: 0, rank: 0, totalParticipants: 0 });
 
   const MAX_CAPACITY = 40;
   const ALERT_THRESHOLD = 36; 
@@ -26,6 +28,38 @@ const DashboardView = ({ user }) => {
     return `${yyyy}-${mm}-${dd}`;
   };
 
+  // NOUVEAU : Requête pour récupérer le classement une seule fois au chargement
+  useEffect(() => {
+    const fetchRankData = async () => {
+      try {
+        const token = localStorage.getItem('octo_token');
+        if (!token) return;
+        
+        const response = await fetch(`http://192.168.1.143:5000/amis`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const classement = await response.json();
+          const monProfil = classement.find(p => p.isMe === true);
+          if (monProfil) {
+            const monRang = classement.findIndex(p => p.isMe === true) + 1;
+            setStatsMois({
+              totalKg: monProfil.totalKg,
+              rank: monRang,
+              totalParticipants: classement.length
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Erreur récupération du classement :", err);
+      }
+    };
+    
+    fetchRankData();
+  }, []);
+
+  // TON CODE D'ORIGINE POUR LE CAPTEUR EN TEMPS RÉEL
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -92,7 +126,6 @@ const DashboardView = ({ user }) => {
       } catch (err) {
         console.error("Erreur Polling Dashboard :", err);
       } finally {
-        // NOUVEAU : On arrête le Skeleton Loader dès que la requête est terminée (succès ou échec)
         setIsLoading(false);
       }
     };
@@ -149,15 +182,34 @@ const DashboardView = ({ user }) => {
       </div>
 
       <div style={styles.topGrid}>
-        {/* NOUVEAU : Affichage conditionnel des Skeletons ou des vrais widgets */}
         {isLoading ? (
           <>
+            <div className="skeleton skeleton-card"></div>
             <div className="skeleton skeleton-card"></div>
             <div className="skeleton skeleton-card"></div>
             <div className="skeleton skeleton-doughnut"></div>
           </>
         ) : (
           <>
+            {/* NOUVEAU : La carte de Classement mensuel ajoutée à ton design */}
+            {statsMois.rank > 0 && (
+              <div style={styles.rankCard}>
+                <div style={styles.rankHeader}>
+                  <h4 style={styles.rankTitle}>CLASSEMENT MENSUEL</h4>
+                  <div style={styles.rankIconBox}>
+                    <i className="fa-solid fa-trophy"></i>
+                  </div>
+                </div>
+                <div style={styles.rankContent}>
+                  <span style={styles.rankValue}>{statsMois.rank}</span>
+                  <span style={styles.rankUnit}> / {statsMois.totalParticipants}</span>
+                </div>
+                <div style={styles.rankFooter}>
+                  <p style={styles.rankDate}>Vous avez jeté : <span style={{color: 'var(--primary)', fontWeight: 'bold'}}>{statsMois.totalKg} kg</span></p>
+                </div>
+              </div>
+            )}
+            
             <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
             <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
             <GoalChart currentMass={totalMass} maxCapacity={MAX_CAPACITY} />
@@ -184,7 +236,18 @@ const styles = {
     subtitle: { color: 'var(--text-muted)' },
     simulateBtn: { background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px rgba(76, 175, 80, 0.3)', transition: 'transform 0.1s, background 0.2s', display: 'flex', gap: '10px', alignItems: 'center' },
     topGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '20px' },
-    bottomGrid: { height: '350px' }
+    bottomGrid: { height: '350px' },
+    
+    // Styles pour la nouvelle carte de Classement (calqués sur ton composant WeightCard)
+    rankCard: { background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '10px', border: '1px solid var(--border-color)' },
+    rankHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
+    rankTitle: { fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'bold', margin: 0 },
+    rankIconBox: { width: '35px', height: '35px', borderRadius: '8px', background: 'rgba(243, 156, 18, 0.15)', color: '#f39c12', display: 'grid', placeItems: 'center' },
+    rankContent: { marginTop: '5px' },
+    rankValue: { fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--text-main)' },
+    rankUnit: { fontSize: '1.2rem', color: 'var(--text-muted)', fontWeight: '500' },
+    rankFooter: { marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '10px' },
+    rankDate: { fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }
 };
 
 export default DashboardView;

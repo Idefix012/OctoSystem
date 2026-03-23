@@ -1,11 +1,37 @@
 // src/views/HistoryView.jsx
 import React, { useState, useEffect } from 'react';
 
+// --- IMPORT DES OUTILS DE GRAPHIQUE (Modifié pour Line Chart) ---
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler // Pour remplir la zone sous la courbe
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+// On enregistre les composants de Chart.js
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
 const HistoryView = () => {
   const [historyData, setHistoryData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // On calcule la date d'aujourd'hui au format YYYY-MM-DD pour l'affichage par défaut
+  // On calcule la date d'aujourd'hui au format YYYY-MM-DD
   const getTodayString = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -14,10 +40,23 @@ const HistoryView = () => {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // L'état contient maintenant la date d'aujourd'hui par défaut
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
-  // Ce useEffect s'exécute au chargement ET à chaque fois que 'selectedDate' change
+  // Formatage de la date pour le tableau ET le graphique
+  const formatDate = (dateString) => {
+    const d = new Date(dateString);
+    const jour = d.getDate().toString().padStart(2, '0');
+    const mois = (d.getMonth() + 1).toString().padStart(2, '0');
+    const annee = d.getFullYear();
+    const heures = d.getHours().toString().padStart(2, '0');
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    
+    return {
+      jour: `${jour}/${mois}/${annee}`,
+      heure: `${heures}h${minutes}`
+    };
+  };
+
   useEffect(() => {
     const fetchHistoryByDate = async () => {
       if (!selectedDate) {
@@ -34,7 +73,6 @@ const HistoryView = () => {
           return;
         }
 
-        // On appelle la nouvelle route avec le paramètre ?date=
         const response = await fetch(`http://192.168.1.143:5000/garbages/data_by_date?date=${selectedDate}`, {
           method: 'GET',
           headers: { 
@@ -46,11 +84,7 @@ const HistoryView = () => {
         if (response.ok) {
           const donnees = await response.json();
           setHistoryData(donnees);
-        } else if (response.status === 404) {
-          // Gestion du cas prévu par Evan : Aucune donnée pour cette date
-          setHistoryData([]);
         } else {
-          console.error("Erreur inattendue de l'API");
           setHistoryData([]);
         }
       } catch (err) {
@@ -62,21 +96,73 @@ const HistoryView = () => {
     };
 
     fetchHistoryByDate();
-  }, [selectedDate]); // Le tableau de dépendances écoute la date !
+  }, [selectedDate]);
 
-  // Formatage de la date pour l'affichage dans le tableau React
-  const formatDate = (dateString) => {
-    const d = new Date(dateString);
-    const jour = d.getDate().toString().padStart(2, '0');
-    const mois = (d.getMonth() + 1).toString().padStart(2, '0');
-    const annee = d.getFullYear();
-    const heures = d.getHours().toString().padStart(2, '0');
-    const minutes = d.getMinutes().toString().padStart(2, '0');
-    
-    return {
-      jour: `${jour}/${mois}/${annee}`,
-      heure: `${heures}h${minutes}`
-    };
+  // ==========================================
+  // PRÉPARATION DES DONNÉES POUR LE GRAPHIQUE EN COURBE
+  // ==========================================
+  const chartDataPrep = [...historyData].reverse(); // Ordre chronologique (matin -> soir)
+  
+  const dataGraphique = {
+    labels: chartDataPrep.map(item => formatDate(item.date).heure),
+    datasets: [
+      {
+        label: 'Poids jeté (kg)',
+        data: chartDataPrep.map(item => (parseFloat(item.poids) / 1000).toFixed(2)),
+        borderColor: '#2ecc71', // Couleur de la ligne (Vert)
+        backgroundColor: 'rgba(46, 204, 113, 0.2)', // Couleur de remplissage (Vert transparent)
+        borderWidth: 3,
+        pointBackgroundColor: '#ffffff', // Points blancs à l'intérieur
+        pointBorderColor: '#2ecc71', // Bordure des points verte
+        pointBorderWidth: 2,
+        pointRadius: 5, // Taille des points
+        pointHoverRadius: 7, // Taille des points au survol
+        fill: true, // Remplit la zone sous la courbe
+        tension: 0.4 // Courbe arrondie et fluide (0 = lignes droites, 0.4 = doux)
+      }
+    ]
+  };
+
+  const optionsGraphique = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleFont: { size: 14 },
+        bodyFont: { size: 14, weight: 'bold' },
+        callbacks: {
+          label: (context) => ` + ${context.raw} kg`
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Masse (kg)',
+          color: 'var(--text-muted)'
+        },
+        grid: {
+          color: 'var(--border-color)',
+          borderDash: [5, 5] // Lignes pointillées pour le fond
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Heure de la journée',
+          color: 'var(--text-muted)'
+        },
+        grid: {
+          display: false
+        }
+      }
+    }
   };
 
   return (
@@ -86,7 +172,6 @@ const HistoryView = () => {
         <p style={styles.subtitle}>Consultez le détail de l'activité de votre poubelle par date.</p>
       </div>
 
-      {/* Barre de filtre connectée à l'API */}
       <div style={styles.filterBar}>
         <div style={styles.filterGroup}>
           <label htmlFor="dateFilter" style={styles.filterLabel}>
@@ -98,7 +183,7 @@ const HistoryView = () => {
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             style={styles.dateInput}
-            max={getTodayString()} // Empêche de sélectionner des dates dans le futur
+            max={getTodayString()} 
           />
         </div>
         <div style={styles.statsCount}>
@@ -106,57 +191,72 @@ const HistoryView = () => {
         </div>
       </div>
 
-      <div style={styles.card}>
-        {isLoading ? (
+      {isLoading ? (
+        <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
             <i className="fa-solid fa-spinner fa-spin fa-2x"></i>
             <p style={{ marginTop: '15px' }}>Recherche dans la base de données...</p>
           </div>
-        ) : historyData.length === 0 ? (
+        </div>
+      ) : historyData.length === 0 ? (
+        <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
             <i className="fa-solid fa-folder-open fa-2x"></i>
             <p style={{ marginTop: '15px' }}>Aucune pesée enregistrée pour la date du {selectedDate.split('-').reverse().join('/')}.</p>
           </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Date</th>
-                  <th style={styles.th}>Heure</th>
-                  <th style={styles.th}>Poids ajouté</th>
-                  <th style={styles.th}>Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historyData.map((item, index) => {
-                  const dateFormatee = formatDate(item.date);
-                  const poidsKg = (parseFloat(item.poids) / 1000).toFixed(2);
-                  
-                  return (
-                    <tr key={index} style={styles.tr}>
-                      <td style={styles.td}>
-                        <i className="fa-regular fa-calendar" style={{ color: 'var(--primary)', marginRight: '8px' }}></i>
-                        {dateFormatee.jour}
-                      </td>
-                      <td style={styles.td}>
-                        <i className="fa-regular fa-clock" style={{ color: 'var(--text-muted)', marginRight: '8px' }}></i>
-                        {dateFormatee.heure}
-                      </td>
-                      <td style={{ ...styles.td, fontWeight: 'bold' }}>
-                        + {poidsKg} kg
-                      </td>
-                      <td style={styles.td}>
-                        <span style={styles.badgeSuccess}>Synchronisé</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        </div>
+      ) : (
+        <>
+          {/* CARTE DU GRAPHIQUE EN COURBE */}
+          <div style={{ ...styles.card, marginBottom: '20px', padding: '20px' }}>
+            <h3 style={styles.sectionTitle}>Évolution sur la journée</h3>
+            <div style={styles.chartContainer}>
+              <Line data={dataGraphique} options={optionsGraphique} />
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* LA CARTE DU TABLEAU DÉTAILLÉ */}
+          <div style={styles.card}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Heure</th>
+                    <th style={styles.th}>Poids ajouté</th>
+                    <th style={styles.th}>Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyData.map((item, index) => {
+                    const dateFormatee = formatDate(item.date);
+                    const poidsKg = (parseFloat(item.poids) / 1000).toFixed(2);
+                    
+                    return (
+                      <tr key={index} style={styles.tr}>
+                        <td style={styles.td}>
+                          <i className="fa-regular fa-calendar" style={{ color: 'var(--primary)', marginRight: '8px' }}></i>
+                          {dateFormatee.jour}
+                        </td>
+                        <td style={styles.td}>
+                          <i className="fa-regular fa-clock" style={{ color: 'var(--text-muted)', marginRight: '8px' }}></i>
+                          {dateFormatee.heure}
+                        </td>
+                        <td style={{ ...styles.td, fontWeight: 'bold' }}>
+                          + {poidsKg} kg
+                        </td>
+                        <td style={styles.td}>
+                          <span style={styles.badgeSuccess}>Synchronisé</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -172,6 +272,8 @@ const styles = {
   dateInput: { padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-main)', color: 'var(--text-main)', fontFamily: 'inherit', cursor: 'pointer' },
   statsCount: { color: 'var(--primary)', fontSize: '0.9rem', fontWeight: 'bold', background: 'var(--bg-main)', padding: '6px 12px', borderRadius: '20px' },
   card: { background: 'var(--bg-card)', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid var(--border-color)' },
+  sectionTitle: { marginTop: 0, marginBottom: '20px', color: 'var(--text-main)', fontSize: '1.1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' },
+  chartContainer: { height: '300px', width: '100%', position: 'relative' },
   table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
   th: { padding: '16px', background: 'var(--bg-main)', color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)' },
   tr: { borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' },
