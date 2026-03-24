@@ -1,9 +1,9 @@
 // src/views/DashboardView.jsx
-import MiniBadgeCard from './widgets/MiniBadgeCard';
 import React, { useState, useEffect } from 'react';
 import WeightCard from './widgets/WeightCard';
 import HistoryChart from './widgets/HistoryChart';
 import GoalChart from './widgets/GoalChart'; 
+import MiniBadgeCard from './widgets/MiniBadgeCard'; // IMPORT DU WIDGET DE BADGES
 
 const DashboardView = ({ user }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +36,6 @@ const DashboardView = ({ user }) => {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
         
-        // ROUTE MODIFIÉE : /friends (anciennement /amis)
         const response = await fetch(`http://192.168.1.143:5000/friends`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -70,7 +69,6 @@ const DashboardView = ({ user }) => {
 
         const today = getTodayString();
 
-        // ROUTE MODIFIÉE : /garbage/data_by_date
         const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${today}`, {
           method: 'GET',
           headers: { 
@@ -83,7 +81,6 @@ const DashboardView = ({ user }) => {
           const donnees = await response.json();
           
           if (Array.isArray(donnees) && donnees.length > 0) {
-            // CLÉ MODIFIÉE : item.weight au lieu de item.poids
             const poidsPhysiqueKg = parseFloat(donnees[0].weight) / 1000;
             setTotalMass(parseFloat(poidsPhysiqueKg.toFixed(2)));
 
@@ -112,7 +109,6 @@ const DashboardView = ({ user }) => {
               return `${d.getHours()}h${d.getMinutes().toString().padStart(2, '0')}`;
             }));
             
-            // CLÉ MODIFIÉE : item.weight
             setChartData(donneesChronologiques.map(item => parseFloat(item.weight) / 1000));
             
           } else {
@@ -173,7 +169,6 @@ const DashboardView = ({ user }) => {
 
       <div style={styles.headerRow}>
         <div style={styles.welcome}>
-          {/* CLÉ MODIFIÉE : user.first_name au lieu de user.prenom */}
           <h1 style={styles.title}>Bonjour {user ? user.first_name : 'Utilisateur'} ! 👋</h1>
           <p style={styles.subtitle}>Supervision en temps réel du capteur de masse.</p>
         </div>
@@ -215,16 +210,13 @@ const DashboardView = ({ user }) => {
                 </div>
               </div>
             )}
-            {/* ... Le code de ton rankCard ... */}
             
-            {/* NOUVEAU : Le mini-widget des badges */}
+            {/* INTÉGRATION DU MINI-WIDGET DES BADGES */}
             <MiniBadgeCard 
               totalKg={statsMois.totalKg} 
               rank={statsMois.rank} 
               friendsCount={statsMois.totalParticipants > 0 ? statsMois.totalParticipants - 1 : 0} 
             />
-
-            <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
             
             <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
             <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
