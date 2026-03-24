@@ -1,6 +1,7 @@
 // src/views/CommunityView.jsx
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify'; // Import de la fonction toast
+import { toast } from 'react-toastify';
+import BadgeShowcase from './widgets/BadgeShowcase'; // IMPORT DU MOTEUR DE BADGES
 
 const CommunityView = ({ user }) => {
   const [activeTab, setActiveTab] = useState('leaderboard');
@@ -20,76 +21,84 @@ const CommunityView = ({ user }) => {
   const maxWeight = leaderboard.length > 0 ? Math.max(...leaderboard.map(p => p.totalKg)) : 1;
   const safeMaxWeight = maxWeight > 0 ? maxWeight : 1;
 
+  // --- CALCUL DES STATS POUR LES BADGES ---
+  const myProfile = leaderboard.find(p => p.isMe);
+  const myTotalKg = myProfile ? myProfile.totalKg : 0;
+  const myRank = myProfile ? leaderboard.findIndex(p => p.isMe) + 1 : 0;
+  const myFriendsCount = leaderboard.length > 0 ? leaderboard.length - 1 : 0;
+
   useEffect(() => {
-    const fetchDonneesCommunaute = async () => {
+    const fetchCommunityData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
 
-        const repDemandes = await fetch(`http://192.168.1.143:5000/amis/demandes`, {
+        // Requête pour les demandes en attente
+        const repRequests = await fetch(`http://192.168.1.143:5000/friends/requests`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (repDemandes.ok) {
-          const dataDemandes = await repDemandes.json();
-          setPendingRequests(dataDemandes.demandes || []); 
+        if (repRequests.ok) {
+          const dataRequests = await repRequests.json();
+          setPendingRequests(dataRequests.requests || []); 
         }
 
-        const repListe = await fetch(`http://192.168.1.143:5000/amis`, {
+        // Requête pour le classement
+        const repLeaderboard = await fetch(`http://192.168.1.143:5000/friends`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (repListe.ok) {
-          const dataListe = await repListe.json();
-          setLeaderboard(dataListe || []);
+        if (repLeaderboard.ok) {
+          const dataLeaderboard = await repLeaderboard.json();
+          setLeaderboard(dataLeaderboard || []);
         }
       } catch (err) {
         console.error("Erreur réseau Communauté :", err);
       }
     };
 
-    fetchDonneesCommunaute();
+    fetchCommunityData();
   }, [user]);
 
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
     navigator.clipboard.writeText(code);
-    toast.info(`Code ami ${code} copié dans le presse-papier !`); // Remplacé
+    toast.info(`Code ami ${code} copié dans le presse-papier !`);
   };
 
   const handleSendRequest = async (e) => {
     e.preventDefault();
     if (!searchCode) return;
-    const codeAmiFormate = searchCode.toUpperCase();
-    if (codeAmiFormate === user?.friend_code) {
-      toast.warning("Vous ne pouvez pas vous ajouter vous-même !"); // Remplacé
+    const formattedCode = searchCode.toUpperCase();
+    if (formattedCode === user?.friend_code) {
+      toast.warning("Vous ne pouvez pas vous ajouter vous-même !");
       setSearchCode('');
       return;
     }
 
     try {
       const token = localStorage.getItem('octo_token');
-      const response = await fetch(`http://192.168.1.143:5000/amis/demande`, {
+      const response = await fetch(`http://192.168.1.143:5000/friends/request`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ friend_code: codeAmiFormate })
+        body: JSON.stringify({ friend_code: formattedCode })
       });
       const data = await response.json();
       if (response.ok) {
-        toast.success("Demande d'ami envoyée avec succès !"); // Remplacé
+        toast.success("Demande d'ami envoyée avec succès !");
         setSearchCode(''); 
       } else {
-        toast.error(`Erreur : ${data.error}`); // Remplacé
+        toast.error(`Erreur : ${data.error}`);
       }
     } catch (err) {
-      toast.error("Impossible de joindre le serveur."); // Remplacé
+      toast.error("Impossible de joindre le serveur.");
     }
   };
 
-  const handleReponse = async (friendCode, action) => {
+  const handleManageRequest = async (friendCode, action) => {
     try {
       const token = localStorage.getItem('octo_token');
-      const response = await fetch(`http://192.168.1.143:5000/amis/gestion`, {
+      const response = await fetch(`http://192.168.1.143:5000/friends/manage`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ friend_code: friendCode, action: action })
@@ -97,17 +106,17 @@ const CommunityView = ({ user }) => {
       if (response.ok) {
         setPendingRequests(pendingRequests.filter(req => req.friend_code !== friendCode));
         if (action === 'accepter') {
-            toast.success("Nouvel ami ajouté à votre réseau !"); // Remplacé
+            toast.success("Nouvel ami ajouté à votre réseau !");
             window.location.reload();
         } else {
-            toast.info("Demande refusée."); // Remplacé
+            toast.info("Demande refusée.");
         }
       } else {
         const data = await response.json();
-        toast.error(`Erreur : ${data.error}`); // Remplacé
+        toast.error(`Erreur : ${data.error}`);
       }
     } catch (err) {
-      toast.error("Impossible de joindre le serveur."); // Remplacé
+      toast.error("Impossible de joindre le serveur.");
     }
   };
 
@@ -115,14 +124,14 @@ const CommunityView = ({ user }) => {
     if (!window.confirm("Voulez-vous vraiment supprimer cet ami de votre réseau ?")) return;
     try {
       const token = localStorage.getItem('octo_token');
-      const response = await fetch(`http://192.168.1.143:5000/amis/supprimer`, {
+      const response = await fetch(`http://192.168.1.143:5000/friends/delete`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ friend_code: friendCode })
       });
       if (response.ok) {
         setLeaderboard(leaderboard.filter(person => person.friend_code !== friendCode));
-        toast.success("Ami retiré avec succès."); // Remplacé
+        toast.success("Ami retiré avec succès.");
       }
     } catch (err) {}
   };
@@ -131,7 +140,7 @@ const CommunityView = ({ user }) => {
     if (!window.confirm("Bloquer cet utilisateur ? Il disparaîtra de vos listes et ne pourra plus interagir avec vous.")) return;
     try {
       const token = localStorage.getItem('octo_token');
-      const response = await fetch(`http://192.168.1.143:5000/amis/bloquer`, {
+      const response = await fetch(`http://192.168.1.143:5000/friends/block`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ friend_code: friendCode })
@@ -139,7 +148,7 @@ const CommunityView = ({ user }) => {
       if (response.ok) {
         setLeaderboard(leaderboard.filter(person => person.friend_code !== friendCode));
         setPendingRequests(pendingRequests.filter(req => req.friend_code !== friendCode));
-        toast.success("Utilisateur bloqué avec succès."); // Remplacé
+        toast.success("Utilisateur bloqué avec succès.");
       }
     } catch (err) {
       console.error("Erreur lors du blocage :", err);
@@ -149,13 +158,13 @@ const CommunityView = ({ user }) => {
   const fetchBlockedUsers = async () => {
     try {
       const token = localStorage.getItem('octo_token');
-      const response = await fetch(`http://192.168.1.143:5000/amis/bloques`, {
+      const response = await fetch(`http://192.168.1.143:5000/friends/blocked`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
-        setBlockedList(data.bloques || []);
+        setBlockedList(data.blocked || []);
         setIsViewingBlocked(true);
       }
     } catch (err) {}
@@ -165,14 +174,14 @@ const CommunityView = ({ user }) => {
     if (!window.confirm("Voulez-vous débloquer cet utilisateur ?")) return;
     try {
       const token = localStorage.getItem('octo_token');
-      const response = await fetch(`http://192.168.1.143:5000/amis/debloquer`, {
+      const response = await fetch(`http://192.168.1.143:5000/friends/unblock`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ friend_code: friendCode })
       });
       if (response.ok) {
         setBlockedList(blockedList.filter(person => person.friend_code !== friendCode));
-        toast.success("Utilisateur débloqué."); // Remplacé
+        toast.success("Utilisateur débloqué.");
       }
     } catch (err) {}
   };
@@ -206,9 +215,16 @@ const CommunityView = ({ user }) => {
         {activeTab === 'leaderboard' && (
           <div>
             <h2 style={styles.sectionTitle}>Podium de {getNomDuMois()}</h2>
+            
+            {/* LA VITRINE À TROPHÉES INTÉGRÉE ICI */}
+            <div style={{ marginBottom: '30px' }}>
+              <BadgeShowcase totalKg={myTotalKg} rank={myRank} friendsCount={myFriendsCount} />
+            </div>
+
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
               Celui qui a la barre la plus courte est le plus écologique ! 🌱
             </p>
+
             {leaderboard.length === 0 ? (
               <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Chargement des données...</p>
             ) : (
@@ -225,7 +241,7 @@ const CommunityView = ({ user }) => {
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                       </div>
                       <div style={{ flex: 1, marginLeft: '15px' }}>
-                        <strong>{person.prenom} {person.nom} {person.isMe && '(Vous)'}</strong>
+                        <strong>{person.first_name} {person.last_name} {person.isMe && '(Vous)'}</strong>
                       </div>
                       <div style={{...styles.scoreBadge, backgroundColor: barColor}}>{person.totalKg} kg</div>
                     </div>
@@ -252,7 +268,7 @@ const CommunityView = ({ user }) => {
                     <div key={person.id_user} style={styles.listItem}>
                       <div style={styles.rankCircle}><i className="fa-solid fa-user"></i></div>
                       <div style={{ flex: 1, marginLeft: '15px' }}>
-                        <strong>{person.prenom} {person.nom}</strong> 
+                        <strong>{person.first_name} {person.last_name}</strong> 
                         <div style={{color: 'var(--text-muted)', fontSize: '0.85rem'}}>Code : {person.friend_code}</div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -284,7 +300,7 @@ const CommunityView = ({ user }) => {
                   blockedList.map(person => (
                     <div key={person.friend_code} style={{...styles.listItem, opacity: 0.7}}>
                       <div style={{ flex: 1 }}>
-                        <strong>{person.prenom} {person.nom}</strong> 
+                        <strong>{person.first_name} {person.last_name}</strong> 
                         <div style={{fontSize: '0.85rem'}}>Code : {person.friend_code}</div>
                       </div>
                       <button onClick={() => handleUnblock(person.friend_code)} style={styles.unblockBtn}>
@@ -329,13 +345,13 @@ const CommunityView = ({ user }) => {
               pendingRequests.map(req => (
                 <div key={req.friend_code} style={styles.listItem}>
                   <div style={{ flex: 1 }}>
-                    <strong>{req.prenom} {req.nom}</strong> <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>({req.friend_code})</span>
+                    <strong>{req.first_name} {req.last_name}</strong> <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>({req.friend_code})</span>
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => handleReponse(req.friend_code, 'accepter')} style={styles.acceptBtn} title="Accepter">
+                    <button onClick={() => handleManageRequest(req.friend_code, 'accepter')} style={styles.acceptBtn} title="Accepter">
                       <i className="fa-solid fa-check"></i>
                     </button>
-                    <button onClick={() => handleReponse(req.friend_code, 'refuser')} style={styles.declineBtn} title="Refuser">
+                    <button onClick={() => handleManageRequest(req.friend_code, 'refuser')} style={styles.declineBtn} title="Refuser">
                       <i className="fa-solid fa-xmark"></i>
                     </button>
                     <button onClick={() => handleBlockFriend(req.friend_code)} style={styles.blockBtn} title="Bloquer directement">

@@ -1,7 +1,7 @@
 // src/views/HistoryView.jsx
 import React, { useState, useEffect } from 'react';
 
-// --- IMPORT DES OUTILS DE GRAPHIQUE (Modifié pour Line Chart) ---
+// Import de Chart.js pour le graphique en courbe
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,11 +11,10 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler // Pour remplir la zone sous la courbe
+  Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
-// On enregistre les composants de Chart.js
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -31,7 +30,6 @@ const HistoryView = () => {
   const [historyData, setHistoryData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // On calcule la date d'aujourd'hui au format YYYY-MM-DD
   const getTodayString = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -42,7 +40,6 @@ const HistoryView = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
-  // Formatage de la date pour le tableau ET le graphique
   const formatDate = (dateString) => {
     const d = new Date(dateString);
     const jour = d.getDate().toString().padStart(2, '0');
@@ -73,7 +70,8 @@ const HistoryView = () => {
           return;
         }
 
-        const response = await fetch(`http://192.168.1.143:5000/garbages/data_by_date?date=${selectedDate}`, {
+        // ROUTE MODIFIÉE : /garbage/data_by_date (au lieu de /garbages)
+        const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${selectedDate}`, {
           method: 'GET',
           headers: { 
             'Authorization': `Bearer ${token}`,
@@ -98,27 +96,26 @@ const HistoryView = () => {
     fetchHistoryByDate();
   }, [selectedDate]);
 
-  // ==========================================
-  // PRÉPARATION DES DONNÉES POUR LE GRAPHIQUE EN COURBE
-  // ==========================================
-  const chartDataPrep = [...historyData].reverse(); // Ordre chronologique (matin -> soir)
+  // Préparation des données pour le graphique
+  const chartDataPrep = [...historyData].reverse(); 
   
   const dataGraphique = {
     labels: chartDataPrep.map(item => formatDate(item.date).heure),
     datasets: [
       {
         label: 'Poids jeté (kg)',
-        data: chartDataPrep.map(item => (parseFloat(item.poids) / 1000).toFixed(2)),
-        borderColor: '#2ecc71', // Couleur de la ligne (Vert)
-        backgroundColor: 'rgba(46, 204, 113, 0.2)', // Couleur de remplissage (Vert transparent)
+        // CLÉ MODIFIÉE : on utilise item.weight (qui vient de la BDD anglaise) au lieu de item.poids
+        data: chartDataPrep.map(item => (parseFloat(item.weight) / 1000).toFixed(2)),
+        borderColor: '#2ecc71', 
+        backgroundColor: 'rgba(46, 204, 113, 0.2)', 
         borderWidth: 3,
-        pointBackgroundColor: '#ffffff', // Points blancs à l'intérieur
-        pointBorderColor: '#2ecc71', // Bordure des points verte
+        pointBackgroundColor: '#ffffff',
+        pointBorderColor: '#2ecc71',
         pointBorderWidth: 2,
-        pointRadius: 5, // Taille des points
-        pointHoverRadius: 7, // Taille des points au survol
-        fill: true, // Remplit la zone sous la courbe
-        tension: 0.4 // Courbe arrondie et fluide (0 = lignes droites, 0.4 = doux)
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.4
       }
     ]
   };
@@ -149,7 +146,7 @@ const HistoryView = () => {
         },
         grid: {
           color: 'var(--border-color)',
-          borderDash: [5, 5] // Lignes pointillées pour le fond
+          borderDash: [5, 5]
         }
       },
       x: {
@@ -207,7 +204,6 @@ const HistoryView = () => {
         </div>
       ) : (
         <>
-          {/* CARTE DU GRAPHIQUE EN COURBE */}
           <div style={{ ...styles.card, marginBottom: '20px', padding: '20px' }}>
             <h3 style={styles.sectionTitle}>Évolution sur la journée</h3>
             <div style={styles.chartContainer}>
@@ -215,7 +211,6 @@ const HistoryView = () => {
             </div>
           </div>
 
-          {/* LA CARTE DU TABLEAU DÉTAILLÉ */}
           <div style={styles.card}>
             <div style={{ overflowX: 'auto' }}>
               <table style={styles.table}>
@@ -230,7 +225,8 @@ const HistoryView = () => {
                 <tbody>
                   {historyData.map((item, index) => {
                     const dateFormatee = formatDate(item.date);
-                    const poidsKg = (parseFloat(item.poids) / 1000).toFixed(2);
+                    // CLÉ MODIFIÉE : item.weight
+                    const poidsKg = (parseFloat(item.weight) / 1000).toFixed(2);
                     
                     return (
                       <tr key={index} style={styles.tr}>

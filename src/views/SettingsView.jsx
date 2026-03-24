@@ -1,27 +1,26 @@
 // src/views/SettingsView.jsx
 import React, { useState } from 'react';
-import { toast } from 'react-toastify'; // Import de la fonction toast
+import { toast } from 'react-toastify'; 
 
 const SettingsView = ({ onLogout, user }) => {
-  const [prenom, setPrenom] = useState(user?.prenom || '');
-  const [nom, setNom] = useState(user?.nom || '');
-  const [email, setEmail] = useState(user?.mail || '');
+  // États mis à jour avec les clés en anglais venant de la BDD
+  const [firstName, setFirstName] = useState(user?.first_name || '');
+  const [lastName, setLastName] = useState(user?.last_name || '');
+  const [email, setEmail] = useState(user?.email || '');
   
-  const [communeSearch, setCommuneSearch] = useState('');
-  const [communeList, setCommuneList] = useState([]);
+  const [citySearch, setCitySearch] = useState('');
+  const [cityList, setCityList] = useState([]);
 
-  const [ancienMdp, setAncienMdp] = useState('');
-  const [nouveauMdp, setNouveauMdp] = useState('');
-  const [confirmerMdp, setConfirmerMdp] = useState('');
+  // États pour les mots de passe
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  const [language, setLanguage] = useState('fr');
-  const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
 
   const toggleDarkMode = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
-    
     if (newMode) {
       document.body.classList.add('dark-mode');
     } else {
@@ -32,42 +31,50 @@ const SettingsView = ({ onLogout, user }) => {
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
     navigator.clipboard.writeText(code);
-    toast.info(`Code ami ${code} copié !`); // Remplacé
+    toast.info(`Code ami ${code} copié !`); 
   };
 
-  const handleRechercheCommune = async (texte) => {
-    setCommuneSearch(texte);
-    if (texte.length < 2) {
-      setCommuneList([]);
+  // ROUTE MODIFIÉE : /search_city
+  const handleSearchCity = async (text) => {
+    setCitySearch(text);
+    if (text.length < 2) {
+      setCityList([]);
       return;
     }
     try {
-      const response = await fetch(`http://192.168.1.143:5000/recherche_commune?q=${texte}`);
+      const response = await fetch(`http://192.168.1.143:5000/search_city?q=${encodeURIComponent(text)}`);
       if (response.ok) {
         const data = await response.json();
-        setCommuneList(data);
+        setCityList(data);
       }
     } catch (error) {
       console.error("Erreur recherche commune :", error);
     }
   };
 
-  const handleSelectCommune = (nomCommune) => {
-    setCommuneSearch(nomCommune);
-    setCommuneList([]); 
+  const handleSelectCity = (cityName) => {
+    setCitySearch(cityName);
+    setCityList([]); 
   };
 
+  // ROUTE MODIFIÉE : /user/edit
   const handleSaveProfile = async () => {
     try {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
-      const payload = { prenom: prenom, nom: nom, mail: email };
-      if (communeSearch.trim() !== '') {
-        payload.commune = communeSearch.trim();
+      // Payload avec les clés en anglais attendues par l'API
+      const payload = { 
+        first_name: firstName, 
+        last_name: lastName, 
+        email: email 
+      };
+      
+      if (citySearch.trim() !== '') {
+        payload.city_name = citySearch.trim();
       }
 
-      const response = await fetch(`http://192.168.1.143:5000/utilisateur/modifier`, {
+      const response = await fetch(`http://192.168.1.143:5000/user/edit`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -77,30 +84,31 @@ const SettingsView = ({ onLogout, user }) => {
       });
 
       if (response.ok) {
-        toast.success("Profil mis à jour ! Reconnectez-vous pour voir les changements."); // Remplacé
+        toast.success("Profil mis à jour ! Reconnectez-vous pour voir les changements."); 
       } else {
         const data = await response.json();
-        toast.error(`Erreur : ${data.error}`); // Remplacé
+        toast.error(`Erreur : ${data.error}`); 
       }
     } catch (err) {
       console.error("Erreur réseau :", err);
-      toast.error("Impossible de joindre le serveur."); // Remplacé
+      toast.error("Impossible de joindre le serveur."); 
     }
   };
 
+  // ROUTE MODIFIÉE : /user/password
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
     
-    if (!ancienMdp || !nouveauMdp || !confirmerMdp) {
-      toast.warning("Veuillez remplir tous les champs de mot de passe."); // Remplacé
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      toast.warning("Veuillez remplir tous les champs de mot de passe."); 
       return;
     }
-    if (nouveauMdp !== confirmerMdp) {
-      toast.error("Les nouveaux mots de passe ne correspondent pas !"); // Remplacé
+    if (newPassword !== confirmPassword) {
+      toast.error("Les nouveaux mots de passe ne correspondent pas !"); 
       return;
     }
-    if (nouveauMdp.length < 6) {
-      toast.warning("Le mot de passe doit faire au moins 6 caractères."); // Remplacé
+    if (newPassword.length < 6) {
+      toast.warning("Le mot de passe doit faire au moins 6 caractères."); 
       return;
     }
 
@@ -108,32 +116,31 @@ const SettingsView = ({ onLogout, user }) => {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
-      const response = await fetch(`http://192.168.1.143:5000/utilisateur/mot_de_passe`, {
+      const response = await fetch(`http://192.168.1.143:5000/user/password`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ ancien_mdp: ancienMdp, nouveau_mdp: nouveauMdp })
+        body: JSON.stringify({ 
+          old_password: oldPassword, 
+          new_password: newPassword 
+        })
       });
 
       if (response.ok) {
-        toast.success("Mot de passe mis à jour avec succès !"); // Remplacé
-        setAncienMdp('');
-        setNouveauMdp('');
-        setConfirmerMdp('');
+        toast.success("Mot de passe mis à jour avec succès !"); 
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
       } else {
         const data = await response.json();
-        toast.error(`Erreur : ${data.error}`); // Remplacé
+        toast.error(`Erreur : ${data.error}`); 
       }
     } catch (err) {
       console.error("Erreur réseau :", err);
-      toast.error("Impossible de joindre le serveur."); // Remplacé
+      toast.error("Impossible de joindre le serveur."); 
     }
-  };
-
-  const handleSaveSettings = () => {
-    toast.success("Vos préférences ont été sauvegardées !"); // Remplacé
   };
 
   return (
@@ -162,11 +169,11 @@ const SettingsView = ({ onLogout, user }) => {
         <div style={styles.formGrid}>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Prénom</label>
-            <input type="text" value={prenom} onChange={(e) => setPrenom(e.target.value)} style={styles.input} />
+            <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} style={styles.input} />
           </div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Nom</label>
-            <input type="text" value={nom} onChange={(e) => setNom(e.target.value)} style={styles.input} />
+            <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} style={styles.input} />
           </div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Adresse Email</label>
@@ -175,20 +182,20 @@ const SettingsView = ({ onLogout, user }) => {
 
           <div style={{...styles.inputGroup, position: 'relative'}}>
             <label style={styles.label}>
-              Commune actuelle : <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{user?.nom_commune || "Non renseignée"}</span>
+              Commune actuelle : <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{user?.city_name || "Non renseignée"}</span>
             </label>
             <input 
               type="text" 
               placeholder="Tapez ici pour changer de commune..."
-              value={communeSearch} 
-              onChange={(e) => handleRechercheCommune(e.target.value)} 
+              value={citySearch} 
+              onChange={(e) => handleSearchCity(e.target.value)} 
               style={styles.input} 
             />
-            {communeList.length > 0 && (
+            {cityList.length > 0 && (
               <ul style={styles.autocompleteList}>
-                {communeList.map((c) => (
-                  <li key={c.id_commune} style={styles.autocompleteItem} onClick={() => handleSelectCommune(c.nom)}>
-                    {c.nom}
+                {cityList.map((c) => (
+                  <li key={c.id_city} style={styles.autocompleteItem} onClick={() => handleSelectCity(c.city_name)}>
+                    {c.city_name}
                   </li>
                 ))}
               </ul>
@@ -209,16 +216,16 @@ const SettingsView = ({ onLogout, user }) => {
         <div style={styles.formGrid}>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Ancien mot de passe</label>
-            <input type="password" placeholder="••••••••" value={ancienMdp} onChange={(e) => setAncienMdp(e.target.value)} style={styles.input} />
+            <input type="password" placeholder="••••••••" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} style={styles.input} />
           </div>
           <div style={styles.inputGroup}></div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Nouveau mot de passe</label>
-            <input type="password" placeholder="••••••••" value={nouveauMdp} onChange={(e) => setNouveauMdp(e.target.value)} style={styles.input} />
+            <input type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={styles.input} />
           </div>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Confirmer le nouveau mot de passe</label>
-            <input type="password" placeholder="••••••••" value={confirmerMdp} onChange={(e) => setConfirmerMdp(e.target.value)} style={styles.input} />
+            <input type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={styles.input} />
           </div>
         </div>
         <button onClick={handleUpdatePassword} style={styles.warningBtn}>

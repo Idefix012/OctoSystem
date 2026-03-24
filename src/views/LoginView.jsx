@@ -1,71 +1,66 @@
 // src/views/LoginView.jsx
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify'; // 1. On importe les Toasts !
+import { toast } from 'react-toastify';
 
 const LoginView = ({ onLoginSuccess }) => {
   const [isLoginMode, setIsLoginMode] = useState(true);
 
-  // Champs du formulaire
+  // Les variables d'états sont passées en anglais pour correspondre à la BDD
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [nom, setNom] = useState('');
-  const [prenom, setPrenom] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState('');
   
-  // États pour la recherche de commune
-  const [searchCommune, setSearchCommune] = useState(''); 
-  const [communeResults, setCommuneResults] = useState([]); 
-  const [isSearchingCommune, setIsSearchingCommune] = useState(false); 
+  const [searchCity, setSearchCity] = useState(''); 
+  const [cityResults, setCityResults] = useState([]); 
+  const [isSearchingCity, setIsSearchingCity] = useState(false); 
   const [showDropdown, setShowDropdown] = useState(false); 
   
   const [isLoading, setIsLoading] = useState(false);
 
-  // ==========================================
-  // MINUTEUR (DEBOUNCE) POUR RECHERCHE COMMUNE
-  // ==========================================
+  // DEBOUNCE POUR LA RECHERCHE DE COMMUNE (URL EN ANGLAIS)
   useEffect(() => {
-    if (!searchCommune || searchCommune.trim().length < 2) {
-      setCommuneResults([]);
+    if (!searchCity || searchCity.trim().length < 2) {
+      setCityResults([]);
       setShowDropdown(false);
       return;
     }
 
     const delayDebounceFn = setTimeout(async () => {
-      setIsSearchingCommune(true);
+      setIsSearchingCity(true);
       try {
-        const response = await fetch(`http://192.168.1.143:5000/recherche_commune?q=${encodeURIComponent(searchCommune)}`);
+        // Nouvelle route : /search_city
+        const response = await fetch(`http://192.168.1.143:5000/search_city?q=${encodeURIComponent(searchCity)}`);
         
         if (response.ok) {
           const data = await response.json();
-          setCommuneResults(data);
+          setCityResults(data);
           setShowDropdown(true);
         }
       } catch (err) {
         console.error("Erreur recherche commune :", err);
       } finally {
-        setIsSearchingCommune(false);
+        setIsSearchingCity(false);
       }
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchCommune]);
+  }, [searchCity]);
 
-  // ==========================================
-  // SÉLECTION D'UNE COMMUNE DANS LA LISTE
-  // ==========================================
-  const handleSelectCommune = (commune) => {
-    const nomVille = commune.nom || commune.nom_commune || "Ville inconnue";
-    setSearchCommune(nomVille); 
+  const handleSelectCity = (city) => {
+    // Les clés de la BDD sont désormais city_name
+    setSearchCity(city.city_name); 
     setShowDropdown(false); 
-    setCommuneResults([]);
+    setCityResults([]);
   };
 
   const toggleMode = () => {
     setIsLoginMode(!isLoginMode);
     setEmail('');
     setPassword('');
-    setNom('');
-    setPrenom('');
-    setSearchCommune('');
+    setLastName('');
+    setFirstName('');
+    setSearchCity('');
     setShowDropdown(false);
   };
 
@@ -77,63 +72,58 @@ const LoginView = ({ onLoginSuccess }) => {
 
     try {
       if (isLoginMode) {
-        // ==========================================
         // MODE CONNEXION
-        // ==========================================
         const response = await fetch('http://192.168.1.143:5000/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, mot_de_passe: password })
+          body: JSON.stringify({ email: cleanEmail, password: password }) // Envoi de password
         });
         
         if (response.ok) {
           const rawData = await response.json();
-          const userData = rawData.donnees;
+          const userData = rawData.data; // La clé est passée de "donnees" à "data"
           
           localStorage.setItem('octo_user', JSON.stringify(userData));
           localStorage.setItem('octo_token', rawData.token);
 
-          toast.success(`Ravi de vous revoir, ${userData.prenom} !`); // Toast de succès
+          toast.success(`Ravi de vous revoir, ${userData.first_name} !`);
           onLoginSuccess(userData); 
         } else {
-          toast.error("Identifiants incorrects."); // Toast d'erreur
+          toast.error("Identifiants incorrects."); 
         }
 
       } else {
-        // ==========================================
         // MODE INSCRIPTION
-        // ==========================================
-        if (!searchCommune) {
-          toast.warning("Veuillez sélectionner une commune."); // Toast d'avertissement
+        if (!searchCity) {
+          toast.warning("Veuillez sélectionner une commune."); 
           setIsLoading(false);
           return;
         }
 
-        const response = await fetch('http://192.168.1.143:5000/inscription', {
+        // Nouvelle route : /register avec JSON en anglais
+        const response = await fetch('http://192.168.1.143:5000/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            nom: nom.trim(),
-            prenom: prenom.trim(),
+            last_name: lastName.trim(),
+            first_name: firstName.trim(),
             email: cleanEmail, 
-            mot_de_passe: password,
-            commune: searchCommune.trim() 
+            password: password,
+            city_name: searchCity.trim() 
           })
         });
 
         if (response.ok) {
-          toast.success("Compte créé avec succès ! Vous pouvez vous connecter."); // Toast de succès
-          setTimeout(() => {
-            setIsLoginMode(true);
-          }, 2000);
+          toast.success("Compte créé avec succès ! Vous pouvez vous connecter.");
+          setTimeout(() => setIsLoginMode(true), 2000);
         } else {
           const errorData = await response.json();
-          toast.error(errorData.error || "Erreur lors de la création du compte."); // Toast d'erreur
+          toast.error(errorData.error || "Erreur lors de la création du compte.");
         }
       }
     } catch (err) {
       console.error(err);
-      toast.error("Erreur réseau : Impossible de joindre l'API."); // Toast d'erreur critique
+      toast.error("Erreur réseau : Impossible de joindre l'API.");
     } finally {
       setIsLoading(false);
     }
@@ -151,22 +141,22 @@ const LoginView = ({ onLoginSuccess }) => {
           {!isLoginMode && (
             <>
               <div className="input-group">
-                <label htmlFor="prenom">Prénom</label>
-                <input type="text" id="prenom" value={prenom} onChange={(e) => setPrenom(e.target.value)} placeholder="Ex: Evan" disabled={isLoading} required />
+                {/* L'interface reste en Français */}
+                <label htmlFor="firstName">Prénom</label>
+                <input type="text" id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Ex: Evan" disabled={isLoading} required />
               </div>
               <div className="input-group">
-                <label htmlFor="nom">Nom</label>
-                <input type="text" id="nom" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Ex: Ollivier" disabled={isLoading} required />
+                <label htmlFor="lastName">Nom</label>
+                <input type="text" id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Ex: Ollivier" disabled={isLoading} required />
               </div>
               
-              {/* --- BARRE DE RECHERCHE DE COMMUNE --- */}
               <div className="input-group" style={{ position: 'relative' }}>
-                <label htmlFor="searchCommune">Commune de résidence</label>
+                <label htmlFor="searchCity">Commune de résidence</label>
                 <input 
                   type="text" 
-                  id="searchCommune"
-                  value={searchCommune} 
-                  onChange={(e) => setSearchCommune(e.target.value)} 
+                  id="searchCity"
+                  value={searchCity} 
+                  onChange={(e) => setSearchCity(e.target.value)} 
                   placeholder="Tapez le nom de votre ville..."
                   disabled={isLoading}
                   autoComplete="off"
@@ -177,24 +167,20 @@ const LoginView = ({ onLoginSuccess }) => {
                   Information: Utilisez des tirets pour les noms composés (ex: Saint Brieuc → Saint-Brieuc).
                 </small>
                 
-                {isSearchingCommune && (
+                {isSearchingCity && (
                   <i className="fa-solid fa-spinner fa-spin" style={{ position: 'absolute', right: '15px', top: '40px', color: 'var(--primary)' }}></i>
                 )}
 
-                {showDropdown && communeResults.length > 0 && (
+                {showDropdown && cityResults.length > 0 && (
                   <ul style={styles.dropdown}>
-                    {communeResults.map((commune, index) => (
-                      <li 
-                        key={index} 
-                        style={styles.dropdownItem}
-                        onClick={() => handleSelectCommune(commune)}
-                      >
-                        {commune.nom || commune.nom_commune}
+                    {cityResults.map((city, index) => (
+                      <li key={index} style={styles.dropdownItem} onClick={() => handleSelectCity(city)}>
+                        {city.city_name}
                       </li>
                     ))}
                   </ul>
                 )}
-                {showDropdown && communeResults.length === 0 && searchCommune.length >= 2 && !isSearchingCommune && (
+                {showDropdown && cityResults.length === 0 && searchCity.length >= 2 && !isSearchingCity && (
                   <ul style={styles.dropdown}>
                     <li style={{ ...styles.dropdownItem, color: 'var(--text-muted)', cursor: 'default' }}>
                       Aucune commune trouvée.
@@ -232,7 +218,6 @@ const LoginView = ({ onLoginSuccess }) => {
             {isLoginMode ? "S'inscrire" : "Se connecter"}
           </button>
         </div>
-
       </div>
     </div>
   );
@@ -240,28 +225,13 @@ const LoginView = ({ onLoginSuccess }) => {
 
 const styles = {
   dropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: 'var(--bg-card)',
-    border: '1px solid var(--border-color)',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-    maxHeight: '200px',
-    overflowY: 'auto',
-    zIndex: 1000,
-    listStyle: 'none',
-    padding: 0,
-    margin: '5px 0 0 0'
+    position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-card)',
+    border: '1px solid var(--border-color)', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    maxHeight: '200px', overflowY: 'auto', zIndex: 1000, listStyle: 'none', padding: 0, margin: '5px 0 0 0'
   },
   dropdownItem: {
-    padding: '10px 15px',
-    cursor: 'pointer',
-    borderBottom: '1px solid var(--border-color)',
-    color: 'var(--text-main)',
-    fontSize: '0.9rem',
-    transition: 'background-color 0.2s'
+    padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)',
+    color: 'var(--text-main)', fontSize: '0.9rem', transition: 'background-color 0.2s'
   }
 };
 

@@ -1,4 +1,5 @@
 // src/views/DashboardView.jsx
+import MiniBadgeCard from './widgets/MiniBadgeCard';
 import React, { useState, useEffect } from 'react';
 import WeightCard from './widgets/WeightCard';
 import HistoryChart from './widgets/HistoryChart';
@@ -14,7 +15,7 @@ const DashboardView = ({ user }) => {
   const [chartLabels, setChartLabels] = useState([]);
   const [chartData, setChartData] = useState([]);
 
-  // NOUVEAU : État pour stocker le classement du mois
+  // État pour stocker le classement du mois
   const [statsMois, setStatsMois] = useState({ totalKg: 0, rank: 0, totalParticipants: 0 });
 
   const MAX_CAPACITY = 40;
@@ -28,14 +29,15 @@ const DashboardView = ({ user }) => {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // NOUVEAU : Requête pour récupérer le classement une seule fois au chargement
+  // Requête pour récupérer le classement une seule fois au chargement
   useEffect(() => {
     const fetchRankData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
         
-        const response = await fetch(`http://192.168.1.143:5000/amis`, {
+        // ROUTE MODIFIÉE : /friends (anciennement /amis)
+        const response = await fetch(`http://192.168.1.143:5000/friends`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -59,7 +61,7 @@ const DashboardView = ({ user }) => {
     fetchRankData();
   }, []);
 
-  // TON CODE D'ORIGINE POUR LE CAPTEUR EN TEMPS RÉEL
+  // Le polling en temps réel
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -68,7 +70,8 @@ const DashboardView = ({ user }) => {
 
         const today = getTodayString();
 
-        const response = await fetch(`http://192.168.1.143:5000/garbages/data_by_date?date=${today}`, {
+        // ROUTE MODIFIÉE : /garbage/data_by_date
+        const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${today}`, {
           method: 'GET',
           headers: { 
             'Authorization': `Bearer ${token}`,
@@ -80,7 +83,8 @@ const DashboardView = ({ user }) => {
           const donnees = await response.json();
           
           if (Array.isArray(donnees) && donnees.length > 0) {
-            const poidsPhysiqueKg = parseFloat(donnees[0].poids) / 1000;
+            // CLÉ MODIFIÉE : item.weight au lieu de item.poids
+            const poidsPhysiqueKg = parseFloat(donnees[0].weight) / 1000;
             setTotalMass(parseFloat(poidsPhysiqueKg.toFixed(2)));
 
             let dernierJetKg = 0;
@@ -88,8 +92,8 @@ const DashboardView = ({ user }) => {
               dernierJetKg = poidsPhysiqueKg;
             } else {
               for (let i = 0; i < donnees.length - 1; i++) {
-                const actuel = parseFloat(donnees[i].poids);
-                const precedent = parseFloat(donnees[i+1].poids);
+                const actuel = parseFloat(donnees[i].weight);
+                const precedent = parseFloat(donnees[i+1].weight);
                 if (actuel > precedent) {
                   dernierJetKg = (actuel - precedent) / 1000;
                   break; 
@@ -107,7 +111,9 @@ const DashboardView = ({ user }) => {
               const d = new Date(item.date);
               return `${d.getHours()}h${d.getMinutes().toString().padStart(2, '0')}`;
             }));
-            setChartData(donneesChronologiques.map(item => parseFloat(item.poids) / 1000));
+            
+            // CLÉ MODIFIÉE : item.weight
+            setChartData(donneesChronologiques.map(item => parseFloat(item.weight) / 1000));
             
           } else {
             setLatestDate("Poubelle vide aujourd'hui");
@@ -167,7 +173,8 @@ const DashboardView = ({ user }) => {
 
       <div style={styles.headerRow}>
         <div style={styles.welcome}>
-          <h1 style={styles.title}>Bonjour {user ? user.prenom : 'Utilisateur'} ! 👋</h1>
+          {/* CLÉ MODIFIÉE : user.first_name au lieu de user.prenom */}
+          <h1 style={styles.title}>Bonjour {user ? user.first_name : 'Utilisateur'} ! 👋</h1>
           <p style={styles.subtitle}>Supervision en temps réel du capteur de masse.</p>
         </div>
         
@@ -191,7 +198,6 @@ const DashboardView = ({ user }) => {
           </>
         ) : (
           <>
-            {/* NOUVEAU : La carte de Classement mensuel ajoutée à ton design */}
             {statsMois.rank > 0 && (
               <div style={styles.rankCard}>
                 <div style={styles.rankHeader}>
@@ -209,6 +215,16 @@ const DashboardView = ({ user }) => {
                 </div>
               </div>
             )}
+            {/* ... Le code de ton rankCard ... */}
+            
+            {/* NOUVEAU : Le mini-widget des badges */}
+            <MiniBadgeCard 
+              totalKg={statsMois.totalKg} 
+              rank={statsMois.rank} 
+              friendsCount={statsMois.totalParticipants > 0 ? statsMois.totalParticipants - 1 : 0} 
+            />
+
+            <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
             
             <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
             <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
@@ -238,7 +254,6 @@ const styles = {
     topGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '20px' },
     bottomGrid: { height: '350px' },
     
-    // Styles pour la nouvelle carte de Classement (calqués sur ton composant WeightCard)
     rankCard: { background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '10px', border: '1px solid var(--border-color)' },
     rankHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
     rankTitle: { fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'bold', margin: 0 },
