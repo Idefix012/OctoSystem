@@ -1,7 +1,8 @@
 // src/views/CommunityView.jsx
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import BadgeShowcase from './widgets/BadgeShowcase'; // IMPORT DU MOTEUR DE BADGES
+import BadgeShowcase from './widgets/BadgeShowcase';
+import { calculateBadges } from '../controllers/badgeEngine';
 
 const CommunityView = ({ user }) => {
   const [activeTab, setActiveTab] = useState('leaderboard');
@@ -13,6 +14,9 @@ const CommunityView = ({ user }) => {
   const [blockedList, setBlockedList] = useState([]);
   const [isViewingBlocked, setIsViewingBlocked] = useState(false);
 
+  // ÉTAT POUR LES BADGES SAUVEGARDÉS EN BDD
+  const [ownedBadges, setOwnedBadges] = useState([]);
+
   const getNomDuMois = () => {
     const mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
     return mois[new Date().getMonth()];
@@ -21,19 +25,19 @@ const CommunityView = ({ user }) => {
   const maxWeight = leaderboard.length > 0 ? Math.max(...leaderboard.map(p => p.totalKg)) : 1;
   const safeMaxWeight = maxWeight > 0 ? maxWeight : 1;
 
-  // --- CALCUL DES STATS POUR LES BADGES ---
+  // --- CALCUL DES STATS DU JOUEUR ---
   const myProfile = leaderboard.find(p => p.isMe);
   const myTotalKg = myProfile ? myProfile.totalKg : 0;
   const myRank = myProfile ? leaderboard.findIndex(p => p.isMe) + 1 : 0;
   const myFriendsCount = leaderboard.length > 0 ? leaderboard.length - 1 : 0;
 
+  // CHARGEMENT INITIAL (Amis et Classement)
   useEffect(() => {
     const fetchCommunityData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
 
-        // Requête pour les demandes en attente
         const repRequests = await fetch(`http://192.168.1.143:5000/friends/requests`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
@@ -43,7 +47,6 @@ const CommunityView = ({ user }) => {
           setPendingRequests(dataRequests.requests || []); 
         }
 
-        // Requête pour le classement
         const repLeaderboard = await fetch(`http://192.168.1.143:5000/friends`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
@@ -59,6 +62,60 @@ const CommunityView = ({ user }) => {
 
     fetchCommunityData();
   }, [user]);
+
+// NOUVEAU : SYNCHRONISATION INTELLIGENTE DES BADGES
+  useEffect(() => {
+    const syncBadges = async () => {
+      const token = localStorage.getItem('octo_token');
+      if (!token) return;
+
+      try {
+        // 1. On récupère les badges PERMANENTS depuis la BDD
+        const rep = await fetch(`http://192.168.1.143:5000/badges/owned`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        let dbBadges = [];
+        if (rep.ok) {
+          const data = await rep.json();
+          dbBadges = data.owned_badges.map(b => b.label); 
+        }
+
+        // 2. On passe nos stats dans le moteur pour voir ce qu'on mérite actuellement
+        const badgesMerites = calculateBadges(myTotalKg, myRank, myFriendsCount);
+        let activeBadgeIds = [...dbBadges]; // On prépare la liste de tous les badges allumés à l'écran
+        
+        for (const badge of badgesMerites) {
+          // CAS A : C'est un badge PERMANENT qu'on vient de gagner mais qui n'est pas en BDD
+          if (badge.isPermanent && badge.unlocked && !dbBadges.includes(badge.id)) {
+            const unlockRep = await fetch(`http://192.168.1.143:5000/badges/unlock`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ label: badge.id })
+            });
+            if (unlockRep.ok) {
+              activeBadgeIds.push(badge.id); // On l'allume
+              toast.success(`🏆 Nouveau trophée permanent : ${badge.name} !`);
+            }
+          } 
+          // CAS B : C'est un badge VOLATIL (Statut mensuel), on l'allume direct si la condition est bonne !
+          else if (!badge.isPermanent && badge.unlocked) {
+            activeBadgeIds.push(badge.id);
+          }
+        }
+        
+        // On met à jour l'affichage visuel avec ce mix BDD / Live !
+        setOwnedBadges(activeBadgeIds);
+
+      } catch (err) {
+        console.error("Erreur synchro badges:", err);
+      }
+    };
+
+    if (leaderboard.length > 0) {
+      syncBadges();
+    }
+  }, [leaderboard, myTotalKg, myRank, myFriendsCount]);
 
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
@@ -197,6 +254,10 @@ const CommunityView = ({ user }) => {
         <button style={activeTab === 'leaderboard' ? styles.tabActive : styles.tab} onClick={() => {setActiveTab('leaderboard'); setIsViewingBlocked(false);}}>
           <i className="fa-solid fa-trophy"></i> Podium
         </button>
+        {/* NOUVEL ONGLET POUR LES BADGES */}
+        <button style={activeTab === 'badges' ? styles.tabActive : styles.tab} onClick={() => {setActiveTab('badges'); setIsViewingBlocked(false);}}>
+          <i className="fa-solid fa-medal"></i> Trophées
+        </button>
         <button style={activeTab === 'friends' ? styles.tabActive : styles.tab} onClick={() => {setActiveTab('friends'); setIsViewingBlocked(false);}}>
           <i className="fa-solid fa-user-group"></i> Mes Amis
         </button>
@@ -216,11 +277,6 @@ const CommunityView = ({ user }) => {
           <div>
             <h2 style={styles.sectionTitle}>Podium de {getNomDuMois()}</h2>
             
-            {/* LA VITRINE À TROPHÉES INTÉGRÉE ICI */}
-            <div style={{ marginBottom: '30px' }}>
-              <BadgeShowcase totalKg={myTotalKg} rank={myRank} friendsCount={myFriendsCount} />
-            </div>
-
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
               Celui qui a la barre la plus courte est le plus écologique ! 🌱
             </p>
@@ -252,6 +308,17 @@ const CommunityView = ({ user }) => {
                 );
               })
             )}
+          </div>
+        )}
+
+        {/* NOUVEL ONGLET : VITRINE À TROPHÉES */}
+        {activeTab === 'badges' && (
+          <div>
+            <h2 style={styles.sectionTitle}>Ma Salle des Trophées</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
+              Retrouvez ici l'ensemble des récompenses que vous avez débloquées grâce à vos actions éco-citoyennes.
+            </p>
+            <BadgeShowcase ownedBadges={ownedBadges} />
           </div>
         )}
 

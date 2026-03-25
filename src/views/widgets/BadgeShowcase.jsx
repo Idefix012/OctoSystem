@@ -1,36 +1,38 @@
 // src/views/widgets/BadgeShowcase.jsx
-
 import React from 'react';
 import { calculateBadges } from '../../controllers/badgeEngine';
 
-const BadgeShowcase = ({ totalKg, rank, friendsCount }) => {
-  // On fait appel à notre moteur pour évaluer les badges en temps réel
-  const badges = calculateBadges(totalKg, rank, friendsCount);
+const BadgeShowcase = ({ ownedBadges = [] }) => {
+  // On récupère toutes les définitions de badges (icône, couleur, nom, description) 
+  // depuis le catalogue, mais on remplace la condition 'unlocked' par la BDD
+  const allBadges = calculateBadges(0, 0, 0).map(badge => ({
+    ...badge,
+    unlocked: ownedBadges.includes(badge.id)
+  }));
 
-  // On calcule combien de badges sont débloqués pour afficher un petit score
-  const unlockedCount = badges.filter(b => b.unlocked).length;
+  const unlockedCount = allBadges.filter(b => b.unlocked).length;
 
   return (
     <div style={styles.card}>
       <div style={styles.header}>
         <h3 style={styles.title}>
           <i className="fa-solid fa-medal" style={{ color: '#f1c40f', marginRight: '8px' }}></i> 
-          Mes Trophées
+          Mes Trophées Permanents
         </h3>
-        <span style={styles.counter}>{unlockedCount} / {badges.length}</span>
+        <span style={styles.counter}>{unlockedCount} / {allBadges.length}</span>
       </div>
       
       <div style={styles.grid}>
-        {badges.map(badge => (
+        {allBadges.map(badge => (
           <div 
             key={badge.id} 
             style={{
               ...styles.badgeItem,
               borderColor: badge.unlocked ? badge.color : 'var(--border-color)',
-              background: badge.unlocked ? `${badge.color}15` : 'var(--bg-main)', // 15 = petite opacité en hex
+              background: badge.unlocked ? `${badge.color}15` : 'var(--bg-main)', 
               opacity: badge.unlocked ? 1 : 0.6
             }}
-            title={badge.description} // Infobulle native au survol
+            title={badge.description}
           >
             <div style={{
               ...styles.iconWrapper,
