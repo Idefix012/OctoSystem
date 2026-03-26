@@ -16,6 +16,9 @@ const SettingsView = ({ onLogout, user }) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // NOUVEL ÉTAT : Pour l'ajout d'une nouvelle poubelle
+  const [newDeveui, setNewDeveui] = useState('');
+
   const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
 
   const toggleDarkMode = () => {
@@ -34,7 +37,7 @@ const SettingsView = ({ onLogout, user }) => {
     toast.info(`Code ami ${code} copié !`); 
   };
 
-  // ROUTE MODIFIÉE : /search_city
+  // RECHERCHE DE COMMUNE
   const handleSearchCity = async (text) => {
     setCitySearch(text);
     if (text.length < 2) {
@@ -57,13 +60,12 @@ const SettingsView = ({ onLogout, user }) => {
     setCityList([]); 
   };
 
-  // ROUTE MODIFIÉE : /user/edit
+  // SAUVEGARDE DU PROFIL
   const handleSaveProfile = async () => {
     try {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
-      // Payload avec les clés en anglais attendues par l'API
       const payload = { 
         first_name: firstName, 
         last_name: lastName, 
@@ -95,7 +97,7 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
-  // ROUTE MODIFIÉE : /user/password
+  // MISE À JOUR DU MOT DE PASSE
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
     
@@ -140,6 +142,40 @@ const SettingsView = ({ onLogout, user }) => {
     } catch (err) {
       console.error("Erreur réseau :", err);
       toast.error("Impossible de joindre le serveur."); 
+    }
+  };
+
+  // NOUVELLE FONCTION : LIER UN CAPTEUR IOT
+  const handleAddGarbage = async (e) => {
+    e.preventDefault();
+    if (!newDeveui || newDeveui.trim().length < 5) {
+      toast.warning("Veuillez entrer un DevEUI valide.");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('octo_token');
+      if (!token) return;
+
+      const response = await fetch(`http://192.168.1.143:5000/garbage/add`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ deveui: newDeveui.trim() })
+      });
+
+      if (response.ok) {
+        toast.success("Super ! Votre nouvelle poubelle est synchronisée.");
+        setNewDeveui(''); // On vide le champ après succès
+      } else {
+        const data = await response.json();
+        toast.error(`Erreur : ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Erreur réseau IoT :", err);
+      toast.error("Impossible de joindre le serveur.");
     }
   };
 
@@ -233,6 +269,33 @@ const SettingsView = ({ onLogout, user }) => {
         </button>
       </div>
 
+      {/* SECTION NOUVELLE : MATÉRIEL IOT */}
+      <div className="settings-card" style={{ marginBottom: '30px' }}>
+        <h3 style={{ color: '#2ecc71', borderBottom: '2px solid var(--border-color)', paddingBottom: '10px' }}>
+          <i className="fa-solid fa-microchip"></i> Mes Capteurs (IoT)
+        </h3>
+        
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '15px' }}>
+          Associez une nouvelle poubelle connectée OctoSystem à votre foyer en saisissant son numéro de série unique (DevEUI) situé sous le couvercle.
+        </p>
+
+        <form onSubmit={handleAddGarbage} style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ ...styles.inputGroup, flex: '1 1 250px' }}>
+            <label style={styles.label}>Numéro de série (DevEUI)</label>
+            <input 
+              type="text" 
+              placeholder="Ex: A1B2-C3D4-E5F6" 
+              value={newDeveui} 
+              onChange={(e) => setNewDeveui(e.target.value.toUpperCase())} 
+              style={{...styles.input, fontFamily: 'monospace', letterSpacing: '1px'}} 
+            />
+          </div>
+          <button type="submit" style={{ ...styles.primaryBtn, width: 'auto', backgroundColor: '#2ecc71' }}>
+            <i className="fa-solid fa-link"></i> Lier la poubelle
+          </button>
+        </form>
+      </div>
+
       {/* SECTION 3 : PRÉFÉRENCES */}
       <div className="settings-card">
         <h3 style={{ borderBottom: '2px solid var(--border-color)', paddingBottom: '10px' }}>Préférences d'affichage</h3>
@@ -271,7 +334,7 @@ const styles = {
   subtitle: { color: 'var(--text-muted)', marginBottom: '30px' },
   codeBox: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-main)', padding: '15px 20px', borderRadius: '12px', marginBottom: '25px', border: '1px dashed var(--primary)' },
   copyBtn: { background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s', display: 'flex', alignItems: 'center', gap: '8px' },
-  formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' },
   inputGroup: { display: 'flex', flexDirection: 'column', gap: '5px' },
   label: { fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'bold' },
   input: { padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-main)', color: 'var(--text-main)', fontSize: '1rem', fontFamily: 'inherit' },

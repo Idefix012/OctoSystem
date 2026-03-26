@@ -1,12 +1,18 @@
 // src/views/DashboardView.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import WeightCard from './widgets/WeightCard';
 import HistoryChart from './widgets/HistoryChart';
 import GoalChart from './widgets/GoalChart'; 
-import MiniBadgeCard from './widgets/MiniBadgeCard'; // IMPORT DU WIDGET DE BADGES
+import MiniBadgeCard from './widgets/MiniBadgeCard'; 
 
 const DashboardView = ({ user }) => {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
+
+  // ÉTATS POUR LA SÉLECTION DE LA POUBELLE
+  const [garbages, setGarbages] = useState([]);
+  const [selectedDeveui, setSelectedDeveui] = useState('');
 
   const [latestMass, setLatestMass] = useState(0);
   const [totalMass, setTotalMass] = useState(0); 
@@ -15,7 +21,6 @@ const DashboardView = ({ user }) => {
   const [chartLabels, setChartLabels] = useState([]);
   const [chartData, setChartData] = useState([]);
 
-  // État pour stocker le classement du mois
   const [statsMois, setStatsMois] = useState({ totalKg: 0, rank: 0, totalParticipants: 0 });
 
   const MAX_CAPACITY = 40;
@@ -29,47 +34,61 @@ const DashboardView = ({ user }) => {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // Requête pour récupérer le classement une seule fois au chargement
+  // 1. CHARGEMENT DU CLASSEMENT ET DE LA LISTE DES POUBELLES
   useEffect(() => {
-    const fetchRankData = async () => {
+    const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
         
-        const response = await fetch(`http://192.168.1.143:5000/friends`, {
+        // A. Récupérer le classement mensuel
+        const repRank = await fetch(`http://192.168.1.143:5000/friends`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        if (response.ok) {
-          const classement = await response.json();
+        if (repRank.ok) {
+          const classement = await repRank.json();
           const monProfil = classement.find(p => p.isMe === true);
           if (monProfil) {
-            const monRang = classement.findIndex(p => p.isMe === true) + 1;
             setStatsMois({
               totalKg: monProfil.totalKg,
-              rank: monRang,
+              rank: classement.findIndex(p => p.isMe === true) + 1,
               totalParticipants: classement.length
             });
           }
         }
+
+        // B. Récupérer la liste des poubelles de l'utilisateur
+        const repGarbages = await fetch(`http://192.168.1.143:5000/garbages`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (repGarbages.ok) {
+          const listGarbages = await repGarbages.json();
+          setGarbages(listGarbages);
+          if (listGarbages.length > 0) {
+            setSelectedDeveui(listGarbages[0].deveui); // Sélectionner la 1ère par défaut
+          } else {
+            setIsLoading(false); // S'il n'y a pas de poubelle, on arrête de charger
+          }
+        }
       } catch (err) {
-        console.error("Erreur récupération du classement :", err);
+        console.error("Erreur Init Dashboard :", err);
       }
     };
     
-    fetchRankData();
+    fetchInitialData();
   }, []);
 
-  // Le polling en temps réel
+  // 2. POLLING DES DONNÉES (Se déclenche uniquement si une poubelle est sélectionnée)
   useEffect(() => {
+    if (!selectedDeveui) return;
+
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
-        if (!token) return;
-
         const today = getTodayString();
 
-        const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${today}`, {
+        // NOUVEAU : On passe le deveui dans l'URL !
+        const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${today}&deveui=${selectedDeveui}`, {
           method: 'GET',
           headers: { 
             'Authorization': `Bearer ${token}`,
@@ -108,22 +127,22 @@ const DashboardView = ({ user }) => {
               const d = new Date(item.date);
               return `${d.getHours()}h${d.getMinutes().toString().padStart(2, '0')}`;
             }));
-            
             setChartData(donneesChronologiques.map(item => parseFloat(item.weight) / 1000));
             
           } else {
+            // Si la poubelle n'a pas de données aujourd'hui
             setLatestDate("Poubelle vide aujourd'hui");
             setLatestMass(0);
             setTotalMass(0);
             setChartLabels([]);
             setChartData([]);
           }
-        } else if (response.status === 404) {
-          setLatestDate("Poubelle vide aujourd'hui");
-          setLatestMass(0);
-          setTotalMass(0);
-          setChartLabels([]);
-          setChartData([]);
+        } else {
+           setLatestDate("Poubelle vide aujourd'hui");
+           setLatestMass(0);
+           setTotalMass(0);
+           setChartLabels([]);
+           setChartData([]);
         }
       } catch (err) {
         console.error("Erreur Polling Dashboard :", err);
@@ -132,11 +151,12 @@ const DashboardView = ({ user }) => {
       }
     };
 
+    setIsLoading(true); // On affiche un chargement quand on change de poubelle
     fetchDashboardData();
     const intervalId = setInterval(fetchDashboardData, 5000);
     return () => clearInterval(intervalId);
 
-  }, []);
+  }, [selectedDeveui]);
 
   const simulateDrop = async () => {
     const newMass = parseFloat((Math.random() * 2.4 + 0.1).toFixed(2));
@@ -170,69 +190,102 @@ const DashboardView = ({ user }) => {
       <div style={styles.headerRow}>
         <div style={styles.welcome}>
           <h1 style={styles.title}>Bonjour {user ? user.first_name : 'Utilisateur'} ! 👋</h1>
-          <p style={styles.subtitle}>Supervision en temps réel du capteur de masse.</p>
+          
+          {/* NOUVEAU : LE MENU DÉROULANT DES POUBELLES */}
+          {garbages.length > 0 ? (
+            <div style={styles.selectWrapper}>
+              <i className="fa-solid fa-microchip" style={styles.selectIcon}></i>
+              <select 
+                value={selectedDeveui} 
+                onChange={(e) => setSelectedDeveui(e.target.value)} 
+                style={styles.selectInput}
+              >
+                {garbages.map((g, index) => (
+                  <option key={g.deveui} value={g.deveui}>
+                    Capteur {index + 1} ({g.deveui})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+             <p style={styles.subtitle}>Supervision en temps réel du capteur de masse.</p>
+          )}
         </div>
         
         <div className="action-buttons">
-            <button onClick={emptyBin} className="danger-btn" disabled={isLoading}>
-              <i className="fa-solid fa-trash-can"></i> Vider la poubelle
+            <button onClick={emptyBin} className="danger-btn" disabled={isLoading || garbages.length === 0}>
+              <i className="fa-solid fa-trash-can"></i> Vider
             </button>
-            <button onClick={simulateDrop} style={styles.simulateBtn} disabled={isLoading}>
-              <i className="fa-solid fa-plus"></i> Simuler un jet
+            <button onClick={simulateDrop} style={styles.simulateBtn} disabled={isLoading || garbages.length === 0}>
+              <i className="fa-solid fa-plus"></i> Simuler
             </button>
         </div>
       </div>
 
-      <div style={styles.topGrid}>
-        {isLoading ? (
-          <>
-            <div className="skeleton skeleton-card"></div>
-            <div className="skeleton skeleton-card"></div>
-            <div className="skeleton skeleton-card"></div>
-            <div className="skeleton skeleton-doughnut"></div>
-          </>
-        ) : (
-          <>
-            {statsMois.rank > 0 && (
-              <div style={styles.rankCard}>
-                <div style={styles.rankHeader}>
-                  <h4 style={styles.rankTitle}>CLASSEMENT MENSUEL</h4>
-                  <div style={styles.rankIconBox}>
-                    <i className="fa-solid fa-trophy"></i>
+      {/* GESTION DU CAS "AUCUNE POUBELLE" */}
+      {garbages.length === 0 && !isLoading ? (
+        <div style={styles.emptyStateCard}>
+          <i className="fa-solid fa-link-slash" style={{ fontSize: '3rem', color: 'var(--border-color)', marginBottom: '15px' }}></i>
+          <h3 style={{ color: 'var(--text-main)', marginBottom: '10px' }}>Aucun capteur détecté</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px auto' }}>
+            Vous n'avez pas encore lié de poubelle connectée OctoSystem à votre compte.
+          </p>
+          <button onClick={() => navigate('/settings')} style={styles.primaryBtn}>
+            <i className="fa-solid fa-gear"></i> Aller dans les paramètres
+          </button>
+        </div>
+      ) : (
+        <>
+          <div style={styles.topGrid}>
+            {isLoading ? (
+              <>
+                <div className="skeleton skeleton-card"></div>
+                <div className="skeleton skeleton-card"></div>
+                <div className="skeleton skeleton-card"></div>
+                <div className="skeleton skeleton-doughnut"></div>
+              </>
+            ) : (
+              <>
+                {statsMois.rank > 0 && (
+                  <div style={styles.rankCard}>
+                    <div style={styles.rankHeader}>
+                      <h4 style={styles.rankTitle}>CLASSEMENT MENSUEL</h4>
+                      <div style={styles.rankIconBox}>
+                        <i className="fa-solid fa-trophy"></i>
+                      </div>
+                    </div>
+                    <div style={styles.rankContent}>
+                      <span style={styles.rankValue}>{statsMois.rank}</span>
+                      <span style={styles.rankUnit}> / {statsMois.totalParticipants}</span>
+                    </div>
+                    <div style={styles.rankFooter}>
+                      <p style={styles.rankDate}>Vous avez jeté : <span style={{color: 'var(--primary)', fontWeight: 'bold'}}>{statsMois.totalKg} kg</span></p>
+                    </div>
                   </div>
-                </div>
-                <div style={styles.rankContent}>
-                  <span style={styles.rankValue}>{statsMois.rank}</span>
-                  <span style={styles.rankUnit}> / {statsMois.totalParticipants}</span>
-                </div>
-                <div style={styles.rankFooter}>
-                  <p style={styles.rankDate}>Vous avez jeté : <span style={{color: 'var(--primary)', fontWeight: 'bold'}}>{statsMois.totalKg} kg</span></p>
-                </div>
-              </div>
+                )}
+                
+                <MiniBadgeCard 
+                  totalKg={statsMois.totalKg} 
+                  rank={statsMois.rank} 
+                  friendsCount={statsMois.totalParticipants > 0 ? statsMois.totalParticipants - 1 : 0} 
+                />
+                
+                <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
+                <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
+                <GoalChart currentMass={totalMass} maxCapacity={MAX_CAPACITY} />
+              </>
             )}
-            
-            {/* INTÉGRATION DU MINI-WIDGET DES BADGES */}
-            <MiniBadgeCard 
-              totalKg={statsMois.totalKg} 
-              rank={statsMois.rank} 
-              friendsCount={statsMois.totalParticipants > 0 ? statsMois.totalParticipants - 1 : 0} 
-            />
-            
-            <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
-            <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
-            <GoalChart currentMass={totalMass} maxCapacity={MAX_CAPACITY} />
-          </>
-        )}
-      </div>
+          </div>
 
-      <div style={styles.bottomGrid}>
-        {isLoading ? (
-          <div className="skeleton skeleton-chart"></div>
-        ) : (
-          <HistoryChart labels={chartLabels} dataPoints={chartData} />
-        )}
-      </div>
-
+          <div style={styles.bottomGrid}>
+            {isLoading ? (
+              <div className="skeleton skeleton-chart"></div>
+            ) : (
+              <HistoryChart labels={chartLabels} dataPoints={chartData} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -242,6 +295,16 @@ const styles = {
     headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: '30px', gap: '15px' },
     title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
     subtitle: { color: 'var(--text-muted)' },
+    
+    // Styles du menu déroulant
+    selectWrapper: { marginTop: '10px', position: 'relative', display: 'inline-flex', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--primary)', borderRadius: '8px', padding: '5px 15px', boxShadow: '0 2px 5px rgba(46, 204, 113, 0.1)' },
+    selectIcon: { color: 'var(--primary)', marginRight: '10px', fontSize: '1.1rem' },
+    selectInput: { background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1rem', fontWeight: 'bold', outline: 'none', cursor: 'pointer', fontFamily: 'inherit', paddingRight: '10px' },
+    
+    // Style de la carte vide (Si aucune poubelle)
+    emptyStateCard: { background: 'var(--bg-card)', border: '1px dashed var(--border-color)', borderRadius: '16px', padding: '50px 20px', textAlign: 'center', marginTop: '20px' },
+    primaryBtn: { background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 25px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
+
     simulateBtn: { background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px rgba(76, 175, 80, 0.3)', transition: 'transform 0.1s, background 0.2s', display: 'flex', gap: '10px', alignItems: 'center' },
     topGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '20px' },
     bottomGrid: { height: '350px' },

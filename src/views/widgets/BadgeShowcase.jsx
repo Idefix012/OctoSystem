@@ -17,7 +17,7 @@ const BadgeShowcase = ({ ownedBadges = [] }) => {
       <div style={styles.header}>
         <h3 style={styles.title}>
           <i className="fa-solid fa-medal" style={{ color: '#f1c40f', marginRight: '8px' }}></i> 
-          Mes Trophées Permanents
+          Mes Trophées
         </h3>
         <span style={styles.counter}>{unlockedCount} / {allBadges.length}</span>
       </div>
