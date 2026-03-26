@@ -65,9 +65,9 @@ const DashboardView = ({ user }) => {
           const listGarbages = await repGarbages.json();
           setGarbages(listGarbages);
           if (listGarbages.length > 0) {
-            setSelectedDeveui(listGarbages[0].deveui); // Sélectionner la 1ère par défaut
+            setSelectedDeveui(listGarbages[0].deveui);
           } else {
-            setIsLoading(false); // S'il n'y a pas de poubelle, on arrête de charger
+            setIsLoading(false); 
           }
         }
       } catch (err) {
@@ -78,7 +78,7 @@ const DashboardView = ({ user }) => {
     fetchInitialData();
   }, []);
 
-  // 2. POLLING DES DONNÉES (Se déclenche uniquement si une poubelle est sélectionnée)
+  // 2. POLLING DES DONNÉES EN TEMPS RÉEL
   useEffect(() => {
     if (!selectedDeveui) return;
 
@@ -87,7 +87,6 @@ const DashboardView = ({ user }) => {
         const token = localStorage.getItem('octo_token');
         const today = getTodayString();
 
-        // NOUVEAU : On passe le deveui dans l'URL !
         const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${today}&deveui=${selectedDeveui}`, {
           method: 'GET',
           headers: { 
@@ -130,7 +129,6 @@ const DashboardView = ({ user }) => {
             setChartData(donneesChronologiques.map(item => parseFloat(item.weight) / 1000));
             
           } else {
-            // Si la poubelle n'a pas de données aujourd'hui
             setLatestDate("Poubelle vide aujourd'hui");
             setLatestMass(0);
             setTotalMass(0);
@@ -151,29 +149,12 @@ const DashboardView = ({ user }) => {
       }
     };
 
-    setIsLoading(true); // On affiche un chargement quand on change de poubelle
+    setIsLoading(true);
     fetchDashboardData();
     const intervalId = setInterval(fetchDashboardData, 5000);
     return () => clearInterval(intervalId);
 
   }, [selectedDeveui]);
-
-  const simulateDrop = async () => {
-    const newMass = parseFloat((Math.random() * 2.4 + 0.1).toFixed(2));
-    setLatestMass(newMass);
-    setTotalMass(prev => prev + newMass > MAX_CAPACITY ? MAX_CAPACITY : parseFloat((prev + newMass).toFixed(2)));
-    const now = new Date();
-    const timeString = `${now.getHours()}h${now.getMinutes().toString().padStart(2, '0')}`;
-    setLatestDate(`Aujourd'hui à ${timeString}`);
-    setChartLabels(prev => [...prev.slice(1), timeString]);
-    setChartData(prev => [...prev.slice(1), newMass]);
-  };
-
-  const emptyBin = () => {
-    setTotalMass(0);
-    setLatestMass(0);
-    setLatestDate("Poubelle vidée à l'instant");
-  };
 
   return (
     <div style={styles.dashboard}>
@@ -191,7 +172,6 @@ const DashboardView = ({ user }) => {
         <div style={styles.welcome}>
           <h1 style={styles.title}>Bonjour {user ? user.first_name : 'Utilisateur'} ! 👋</h1>
           
-          {/* NOUVEAU : LE MENU DÉROULANT DES POUBELLES */}
           {garbages.length > 0 ? (
             <div style={styles.selectWrapper}>
               <i className="fa-solid fa-microchip" style={styles.selectIcon}></i>
@@ -211,18 +191,8 @@ const DashboardView = ({ user }) => {
              <p style={styles.subtitle}>Supervision en temps réel du capteur de masse.</p>
           )}
         </div>
-        
-        <div className="action-buttons">
-            <button onClick={emptyBin} className="danger-btn" disabled={isLoading || garbages.length === 0}>
-              <i className="fa-solid fa-trash-can"></i> Vider
-            </button>
-            <button onClick={simulateDrop} style={styles.simulateBtn} disabled={isLoading || garbages.length === 0}>
-              <i className="fa-solid fa-plus"></i> Simuler
-            </button>
-        </div>
       </div>
 
-      {/* GESTION DU CAS "AUCUNE POUBELLE" */}
       {garbages.length === 0 && !isLoading ? (
         <div style={styles.emptyStateCard}>
           <i className="fa-solid fa-link-slash" style={{ fontSize: '3rem', color: 'var(--border-color)', marginBottom: '15px' }}></i>
@@ -296,16 +266,13 @@ const styles = {
     title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
     subtitle: { color: 'var(--text-muted)' },
     
-    // Styles du menu déroulant
     selectWrapper: { marginTop: '10px', position: 'relative', display: 'inline-flex', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--primary)', borderRadius: '8px', padding: '5px 15px', boxShadow: '0 2px 5px rgba(46, 204, 113, 0.1)' },
     selectIcon: { color: 'var(--primary)', marginRight: '10px', fontSize: '1.1rem' },
     selectInput: { background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1rem', fontWeight: 'bold', outline: 'none', cursor: 'pointer', fontFamily: 'inherit', paddingRight: '10px' },
     
-    // Style de la carte vide (Si aucune poubelle)
     emptyStateCard: { background: 'var(--bg-card)', border: '1px dashed var(--border-color)', borderRadius: '16px', padding: '50px 20px', textAlign: 'center', marginTop: '20px' },
     primaryBtn: { background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 25px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
 
-    simulateBtn: { background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px rgba(76, 175, 80, 0.3)', transition: 'transform 0.1s, background 0.2s', display: 'flex', gap: '10px', alignItems: 'center' },
     topGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '20px' },
     bottomGrid: { height: '350px' },
     

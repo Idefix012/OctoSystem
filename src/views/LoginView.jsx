@@ -164,7 +164,7 @@ const LoginView = ({ onLoginSuccess }) => {
                 />
 
                 <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '5px', display: 'block', fontStyle: 'italic' }}>
-                  Information: Utilisez des tirets pour les noms composés (ex: Saint Brieuc → Saint-Brieuc).
+                  Information: Utilisez des tirets pour les noms composés (ex:  La trinité sur mer ➡ La trinité-sur-mer).
                 </small>
                 
                 {isSearchingCity && (
