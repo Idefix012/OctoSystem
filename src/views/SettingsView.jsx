@@ -7,12 +7,18 @@ const SettingsView = ({ onLogout, user }) => {
   const [lastName, setLastName] = useState(user?.last_name || '');
   const [email, setEmail] = useState(user?.email || '');
   
+  const [householdSize, setHouseholdSize] = useState(user?.household_size || 1);
+  
   const [citySearch, setCitySearch] = useState('');
   const [cityList, setCityList] = useState([]);
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [newDeveui, setNewDeveui] = useState('');
 
@@ -57,6 +63,11 @@ const SettingsView = ({ onLogout, user }) => {
   };
 
   const handleSaveProfile = async () => {
+    if (householdSize < 1) {
+      toast.warning("Le foyer doit compter au moins 1 personne.");
+      return;
+    }
+
     try {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
@@ -64,7 +75,8 @@ const SettingsView = ({ onLogout, user }) => {
       const payload = { 
         first_name: firstName, 
         last_name: lastName, 
-        email: email 
+        email: email,
+        household_size: parseInt(householdSize, 10)
       };
       
       if (citySearch.trim() !== '') {
@@ -129,6 +141,9 @@ const SettingsView = ({ onLogout, user }) => {
         setOldPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        setShowOldPassword(false);
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
       } else {
         const data = await response.json();
         toast.error(`Erreur : ${data.error}`); 
@@ -172,7 +187,6 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
-  // NOUVELLE FONCTION : SUPPRESSION DU COMPTE (RGPD)
   const handleDeleteAccount = async () => {
     if (!window.confirm("ÊTES-VOUS SÛR(E) ?\n\nCette action est totalement irréversible. Toutes vos données personnelles, vos statistiques, vos capteurs et votre réseau d'amis seront supprimés définitivement.")) {
       return;
@@ -192,7 +206,7 @@ const SettingsView = ({ onLogout, user }) => {
       if (response.ok) {
         toast.success("Votre compte a été supprimé. À bientôt !");
         setTimeout(() => {
-          onLogout(); // On déconnecte l'utilisateur pour le renvoyer à l'écran de connexion
+          onLogout();
         }, 1500);
       } else {
         const data = await response.json();
@@ -241,7 +255,21 @@ const SettingsView = ({ onLogout, user }) => {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={styles.input} />
           </div>
 
-          <div style={{...styles.inputGroup, position: 'relative'}}>
+          <div style={styles.inputGroup}>
+            <label style={styles.label} title="Permet de rendre le classement communautaire équitable">
+              Personnes au foyer <i className="fa-solid fa-circle-info" style={{color: 'var(--primary)'}}></i>
+            </label>
+            <input 
+              type="number" 
+              min="1" 
+              max="20"
+              value={householdSize} 
+              onChange={(e) => setHouseholdSize(e.target.value)} 
+              style={styles.input} 
+            />
+          </div>
+
+          <div style={{...styles.inputGroup, position: 'relative', gridColumn: '1 / -1'}}>
             <label style={styles.label}>
               Commune actuelle : <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{user?.city_name || "Non renseignée"}</span>
             </label>
@@ -275,19 +303,66 @@ const SettingsView = ({ onLogout, user }) => {
           <i className="fa-solid fa-lock"></i> Sécurité
         </h3>
         <div style={styles.formGrid}>
+          
+          {/* ANCIEN MOT DE PASSE */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Ancien mot de passe</label>
-            <input type="password" placeholder="••••••••" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} style={styles.input} />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input 
+                type={showOldPassword ? "text" : "password"} 
+                placeholder="••••••••" 
+                value={oldPassword} 
+                onChange={(e) => setOldPassword(e.target.value)} 
+                style={{ ...styles.input, paddingRight: '40px', width: '100%', boxSizing: 'border-box' }} 
+              />
+              <i 
+                className={`fa-solid ${showOldPassword ? 'fa-eye-slash' : 'fa-eye'}`} 
+                onClick={() => setShowOldPassword(!showOldPassword)}
+                style={{ position: 'absolute', right: '15px', color: 'var(--text-muted)', cursor: 'pointer' }}
+              ></i>
+            </div>
           </div>
+          
           <div style={styles.inputGroup}></div>
+          
+          {/* NOUVEAU MOT DE PASSE */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Nouveau mot de passe</label>
-            <input type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={styles.input} />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input 
+                type={showNewPassword ? "text" : "password"} 
+                placeholder="••••••••" 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                style={{ ...styles.input, paddingRight: '40px', width: '100%', boxSizing: 'border-box' }} 
+              />
+              <i 
+                className={`fa-solid ${showNewPassword ? 'fa-eye-slash' : 'fa-eye'}`} 
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{ position: 'absolute', right: '15px', color: 'var(--text-muted)', cursor: 'pointer' }}
+              ></i>
+            </div>
           </div>
+          
+          {/* CONFIRMATION DU NOUVEAU MOT DE PASSE */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Confirmer le nouveau mot de passe</label>
-            <input type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={styles.input} />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input 
+                type={showConfirmPassword ? "text" : "password"} 
+                placeholder="••••••••" 
+                value={confirmPassword} 
+                onChange={(e) => setConfirmPassword(e.target.value)} 
+                style={{ ...styles.input, paddingRight: '40px', width: '100%', boxSizing: 'border-box' }} 
+              />
+              <i 
+                className={`fa-solid ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'}`} 
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{ position: 'absolute', right: '15px', color: 'var(--text-muted)', cursor: 'pointer' }}
+              ></i>
+            </div>
           </div>
+
         </div>
         <button onClick={handleUpdatePassword} style={styles.warningBtn}>
           Modifier le mot de passe

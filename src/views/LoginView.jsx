@@ -17,6 +17,7 @@ const LoginView = ({ onLoginSuccess }) => {
   const [showDropdown, setShowDropdown] = useState(false); 
   
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // ETAT POUR L'OEIL
 
   // DEBOUNCE POUR LA RECHERCHE DE COMMUNE (URL EN ANGLAIS)
   useEffect(() => {
@@ -62,6 +63,7 @@ const LoginView = ({ onLoginSuccess }) => {
     setFirstName('');
     setSearchCity('');
     setShowDropdown(false);
+    setShowPassword(false);
   };
 
   const handleSubmit = async (e) => {
@@ -198,7 +200,24 @@ const LoginView = ({ onLoginSuccess }) => {
 
           <div className="input-group">
             <label htmlFor="password">Mot de passe</label>
-            <input type="password" id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" disabled={isLoading} required />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input 
+                type={showPassword ? "text" : "password"} 
+                id="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                placeholder="••••••••" 
+                disabled={isLoading} 
+                required 
+                style={{ width: '100%', paddingRight: '40px', boxSizing: 'border-box' }}
+              />
+              <i 
+                className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`} 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: '15px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}
+                title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              ></i>
+            </div>
           </div>
 
           <button type="submit" className="login-btn" disabled={isLoading}>
