@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { toast } from 'react-toastify'; 
 
 const SettingsView = ({ onLogout, user }) => {
-  // États mis à jour avec les clés en anglais venant de la BDD
   const [firstName, setFirstName] = useState(user?.first_name || '');
   const [lastName, setLastName] = useState(user?.last_name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -11,12 +10,10 @@ const SettingsView = ({ onLogout, user }) => {
   const [citySearch, setCitySearch] = useState('');
   const [cityList, setCityList] = useState([]);
 
-  // États pour les mots de passe
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // NOUVEL ÉTAT : Pour l'ajout d'une nouvelle poubelle
   const [newDeveui, setNewDeveui] = useState('');
 
   const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
@@ -37,7 +34,6 @@ const SettingsView = ({ onLogout, user }) => {
     toast.info(`Code ami ${code} copié !`); 
   };
 
-  // RECHERCHE DE COMMUNE
   const handleSearchCity = async (text) => {
     setCitySearch(text);
     if (text.length < 2) {
@@ -60,7 +56,6 @@ const SettingsView = ({ onLogout, user }) => {
     setCityList([]); 
   };
 
-  // SAUVEGARDE DU PROFIL
   const handleSaveProfile = async () => {
     try {
       const token = localStorage.getItem('octo_token');
@@ -97,7 +92,6 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
-  // MISE À JOUR DU MOT DE PASSE
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
     
@@ -145,7 +139,6 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
-  // NOUVELLE FONCTION : LIER UN CAPTEUR IOT
   const handleAddGarbage = async (e) => {
     e.preventDefault();
     if (!newDeveui || newDeveui.trim().length < 5) {
@@ -168,13 +161,45 @@ const SettingsView = ({ onLogout, user }) => {
 
       if (response.ok) {
         toast.success("Super ! Votre nouvelle poubelle est synchronisée.");
-        setNewDeveui(''); // On vide le champ après succès
+        setNewDeveui(''); 
       } else {
         const data = await response.json();
         toast.error(`Erreur : ${data.error}`);
       }
     } catch (err) {
       console.error("Erreur réseau IoT :", err);
+      toast.error("Impossible de joindre le serveur.");
+    }
+  };
+
+  // NOUVELLE FONCTION : SUPPRESSION DU COMPTE (RGPD)
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("ÊTES-VOUS SÛR(E) ?\n\nCette action est totalement irréversible. Toutes vos données personnelles, vos statistiques, vos capteurs et votre réseau d'amis seront supprimés définitivement.")) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('octo_token');
+      if (!token) return;
+
+      const response = await fetch(`http://192.168.1.143:5000/user/delete`, {
+        method: 'DELETE',
+        headers: { 
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        toast.success("Votre compte a été supprimé. À bientôt !");
+        setTimeout(() => {
+          onLogout(); // On déconnecte l'utilisateur pour le renvoyer à l'écran de connexion
+        }, 1500);
+      } else {
+        const data = await response.json();
+        toast.error(`Erreur : ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Erreur suppression compte :", err);
       toast.error("Impossible de joindre le serveur.");
     }
   };
@@ -269,7 +294,7 @@ const SettingsView = ({ onLogout, user }) => {
         </button>
       </div>
 
-      {/* SECTION NOUVELLE : MATÉRIEL IOT */}
+      {/* SECTION 3 : MATÉRIEL IOT */}
       <div className="settings-card" style={{ marginBottom: '30px' }}>
         <h3 style={{ color: '#2ecc71', borderBottom: '2px solid var(--border-color)', paddingBottom: '10px' }}>
           <i className="fa-solid fa-microchip"></i> Mes Capteurs (IoT)
@@ -296,8 +321,8 @@ const SettingsView = ({ onLogout, user }) => {
         </form>
       </div>
 
-      {/* SECTION 3 : PRÉFÉRENCES */}
-      <div className="settings-card">
+      {/* SECTION 4 : PRÉFÉRENCES */}
+      <div className="settings-card" style={{ marginBottom: '30px' }}>
         <h3 style={{ borderBottom: '2px solid var(--border-color)', paddingBottom: '10px' }}>Préférences d'affichage</h3>
         <div className="setting-item">
           <div className="setting-info">
@@ -310,26 +335,44 @@ const SettingsView = ({ onLogout, user }) => {
           </label>
         </div>
 
-        {/* SECTION 4 : DÉCONNEXION */}
-        <h3 style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-color)', color: '#e74c3c' }}>
+        <h3 style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-color)', color: '#f39c12' }}>
           Session
         </h3>
-        <div className="setting-item" style={{ borderBottom: 'none' }}>
+        <div className="setting-item" style={{ borderBottom: 'none', marginBottom: '0' }}>
           <div className="setting-info">
-            <h4 style={{ color: '#e74c3c' }}>Déconnexion</h4>
+            <h4 style={{ color: '#f39c12' }}>Déconnexion</h4>
             <p>Fermer la session actuelle sur cet appareil.</p>
           </div>
-          <button onClick={onLogout} style={styles.dangerButton}>
+          <button onClick={onLogout} style={{ ...styles.warningBtn, width: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <i className="fa-solid fa-right-from-bracket"></i> Se déconnecter
           </button>
         </div>
       </div>
+
+      {/* SECTION 5 : ZONE DE DANGER (RGPD) */}
+      <div className="settings-card" style={{ border: '2px dashed #e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.05)' }}>
+        <h3 style={{ color: '#e74c3c', borderBottom: '2px solid rgba(231, 76, 60, 0.2)', paddingBottom: '10px' }}>
+          <i className="fa-solid fa-triangle-exclamation"></i> Zone de Danger
+        </h3>
+        <div className="setting-item" style={{ borderBottom: 'none', marginBottom: '0', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
+          <div className="setting-info" style={{ flex: '1 1 300px' }}>
+            <h4 style={{ color: '#e74c3c' }}>Suppression du compte (RGPD)</h4>
+            <p>
+              La suppression de votre compte est irréversible. Toutes vos données personnelles, vos statistiques, vos capteurs et votre réseau d'amis seront définitivement effacés de nos serveurs.
+            </p>
+          </div>
+          <button onClick={handleDeleteAccount} style={{ ...styles.dangerButton, width: 'auto' }}>
+            <i className="fa-solid fa-user-xmark"></i> Supprimer définitivement
+          </button>
+        </div>
+      </div>
+
     </div>
   );
 };
 
 const styles = {
-  container: { padding: '20px', maxWidth: '800px', margin: '0 auto', width: '100%' },
+  container: { padding: '20px', maxWidth: '800px', margin: '0 auto', width: '100%', paddingBottom: '50px' },
   title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
   subtitle: { color: 'var(--text-muted)', marginBottom: '30px' },
   codeBox: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-main)', padding: '15px 20px', borderRadius: '12px', marginBottom: '25px', border: '1px dashed var(--primary)' },
@@ -342,7 +385,7 @@ const styles = {
   autocompleteItem: { padding: '10px 15px', borderBottom: '1px solid var(--border-color)', cursor: 'pointer', color: 'var(--text-main)' },
   primaryBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s', width: '100%' },
   warningBtn: { background: '#f39c12', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s', width: '100%' },
-  dangerButton: { display: 'inline-flex', alignItems: 'center', gap: '10px', backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', transition: 'background 0.2s' }
+  dangerButton: { display: 'inline-flex', alignItems: 'center', gap: '10px', backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'background 0.2s' }
 };
 
 export default SettingsView;
