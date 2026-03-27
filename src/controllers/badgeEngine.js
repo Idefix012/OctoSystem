@@ -27,7 +27,7 @@ export const calculateBadges = (totalKg, rank, friendsCount) => {
       icon: 'fa-recycle',
       color: '#27ae60',
       isPermanent: false, 
-      unlocked: totalKg >= 0 && totalKg <= 5
+      unlocked: totalKg > 0 && totalKg <= 5
     },
     {
       id: 'lightweight',
@@ -36,7 +36,7 @@ export const calculateBadges = (totalKg, rank, friendsCount) => {
       icon: 'fa-feather',
       color: '#f1c40f',
       isPermanent: false, 
-      unlocked: totalKg >= 0 && totalKg <= 15
+      unlocked: totalKg > 0 && totalKg <= 15
     },
     {
       id: 'social',

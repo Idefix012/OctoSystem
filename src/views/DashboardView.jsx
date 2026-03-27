@@ -1,6 +1,7 @@
 // src/views/DashboardView.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client'; // <-- C'EST CETTE LIGNE QUI MANQUAIT !
 import WeightCard from './widgets/WeightCard';
 import HistoryChart from './widgets/HistoryChart';
 import GoalChart from './widgets/GoalChart'; 
@@ -78,10 +79,11 @@ const DashboardView = ({ user }) => {
     fetchInitialData();
   }, []);
 
-  // 2. POLLING DES DONNÉES EN TEMPS RÉEL
+  // 2. ÉCOUTE TEMPS RÉEL VIA WEBSOCKET (Adieu le Polling !)
   useEffect(() => {
     if (!selectedDeveui) return;
 
+    // La fonction qui va chercher les données à jour
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
@@ -135,24 +137,34 @@ const DashboardView = ({ user }) => {
             setChartLabels([]);
             setChartData([]);
           }
-        } else {
-           setLatestDate("Poubelle vide aujourd'hui");
-           setLatestMass(0);
-           setTotalMass(0);
-           setChartLabels([]);
-           setChartData([]);
         }
       } catch (err) {
-        console.error("Erreur Polling Dashboard :", err);
+        console.error("Erreur Fetch Dashboard :", err);
       } finally {
         setIsLoading(false);
       }
     };
 
+    // 1. On charge les données une première fois à l'affichage
     setIsLoading(true);
     fetchDashboardData();
-    const intervalId = setInterval(fetchDashboardData, 5000);
-    return () => clearInterval(intervalId);
+
+    // 2. On ouvre la connexion WebSocket avec le serveur d'Evan
+    const socket = io('http://192.168.1.143:5000');
+
+    // 3. On écoute l'événement 'new_sensor_data'
+    socket.on('new_sensor_data', (data) => {
+      // Si la donnée reçue concerne bien la poubelle que je suis en train de regarder
+      if (data.deveui === selectedDeveui) {
+        console.log("🔔 Ding Dong ! Nouvelle pesée détectée sur la poubelle en temps réel !");
+        fetchDashboardData(); // On rappelle la fonction pour mettre à jour le graphique
+      }
+    });
+
+    // 4. On nettoie la connexion proprement quand on quitte la page
+    return () => {
+      socket.disconnect();
+    };
 
   }, [selectedDeveui]);
 

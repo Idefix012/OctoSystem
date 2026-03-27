@@ -5,9 +5,11 @@ import { toast } from 'react-toastify';
 const LoginView = ({ onLoginSuccess }) => {
   const [isLoginMode, setIsLoginMode] = useState(true);
 
-  // Les variables d'états sont passées en anglais pour correspondre à la BDD
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // NOUVEAU : État pour la confirmation
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
   const [lastName, setLastName] = useState('');
   const [firstName, setFirstName] = useState('');
   
@@ -17,9 +19,11 @@ const LoginView = ({ onLoginSuccess }) => {
   const [showDropdown, setShowDropdown] = useState(false); 
   
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // ETAT POUR L'OEIL
+  
+  const [showPassword, setShowPassword] = useState(false);
+  // NOUVEAU : État pour l'œil de confirmation
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false); 
 
-  // DEBOUNCE POUR LA RECHERCHE DE COMMUNE (URL EN ANGLAIS)
   useEffect(() => {
     if (!searchCity || searchCity.trim().length < 2) {
       setCityResults([]);
@@ -30,7 +34,6 @@ const LoginView = ({ onLoginSuccess }) => {
     const delayDebounceFn = setTimeout(async () => {
       setIsSearchingCity(true);
       try {
-        // Nouvelle route : /search_city
         const response = await fetch(`http://192.168.1.143:5000/search_city?q=${encodeURIComponent(searchCity)}`);
         
         if (response.ok) {
@@ -49,7 +52,6 @@ const LoginView = ({ onLoginSuccess }) => {
   }, [searchCity]);
 
   const handleSelectCity = (city) => {
-    // Les clés de la BDD sont désormais city_name
     setSearchCity(city.city_name); 
     setShowDropdown(false); 
     setCityResults([]);
@@ -59,31 +61,43 @@ const LoginView = ({ onLoginSuccess }) => {
     setIsLoginMode(!isLoginMode);
     setEmail('');
     setPassword('');
+    setConfirmPassword(''); // On vide la confirmation
     setLastName('');
     setFirstName('');
     setSearchCity('');
     setShowDropdown(false);
     setShowPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  const handleForgotPassword = () => {
+    // Fonctionnalité en cours de préparation avec Evan !
+    toast.info("La fonction de réinitialisation de mot de passe arrive bientôt !");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
+    
+    // NOUVEAU : Vérification de la confirmation du mot de passe à l'inscription
+    if (!isLoginMode && password !== confirmPassword) {
+      toast.error("Les mots de passe ne correspondent pas !");
+      return;
+    }
 
+    setIsLoading(true);
     const cleanEmail = email.trim().toLowerCase();
 
     try {
       if (isLoginMode) {
-        // MODE CONNEXION
         const response = await fetch('http://192.168.1.143:5000/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, password: password }) // Envoi de password
+          body: JSON.stringify({ email: cleanEmail, password: password })
         });
         
         if (response.ok) {
           const rawData = await response.json();
-          const userData = rawData.data; // La clé est passée de "donnees" à "data"
+          const userData = rawData.data; 
           
           localStorage.setItem('octo_user', JSON.stringify(userData));
           localStorage.setItem('octo_token', rawData.token);
@@ -95,14 +109,12 @@ const LoginView = ({ onLoginSuccess }) => {
         }
 
       } else {
-        // MODE INSCRIPTION
         if (!searchCity) {
           toast.warning("Veuillez sélectionner une commune."); 
           setIsLoading(false);
           return;
         }
 
-        // Nouvelle route : /register avec JSON en anglais
         const response = await fetch('http://192.168.1.143:5000/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -143,7 +155,6 @@ const LoginView = ({ onLoginSuccess }) => {
           {!isLoginMode && (
             <>
               <div className="input-group">
-                {/* L'interface reste en Français */}
                 <label htmlFor="firstName">Prénom</label>
                 <input type="text" id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Ex: Evan" disabled={isLoading} required />
               </div>
@@ -199,7 +210,15 @@ const LoginView = ({ onLoginSuccess }) => {
           </div>
 
           <div className="input-group">
-            <label htmlFor="password">Mot de passe</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label htmlFor="password">Mot de passe</label>
+              {/* NOUVEAU : Lien Mot de passe oublié (uniquement en mode connexion) */}
+              {isLoginMode && (
+                <span onClick={handleForgotPassword} style={{ fontSize: '0.85rem', color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}>
+                  Mot de passe oublié ?
+                </span>
+              )}
+            </div>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input 
                 type={showPassword ? "text" : "password"} 
@@ -219,6 +238,31 @@ const LoginView = ({ onLoginSuccess }) => {
               ></i>
             </div>
           </div>
+
+          {/* NOUVEAU : Champ de confirmation (uniquement en mode inscription) */}
+          {!isLoginMode && (
+            <div className="input-group">
+              <label htmlFor="confirmPassword">Confirmer le mot de passe</label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input 
+                  type={showConfirmPassword ? "text" : "password"} 
+                  id="confirmPassword" 
+                  value={confirmPassword} 
+                  onChange={(e) => setConfirmPassword(e.target.value)} 
+                  placeholder="••••••••" 
+                  disabled={isLoading} 
+                  required 
+                  style={{ width: '100%', paddingRight: '40px', boxSizing: 'border-box' }}
+                />
+                <i 
+                  className={`fa-solid ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'}`} 
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{ position: 'absolute', right: '15px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}
+                  title={showConfirmPassword ? "Masquer la confirmation" : "Afficher la confirmation"}
+                ></i>
+              </div>
+            </div>
+          )}
 
           <button type="submit" className="login-btn" disabled={isLoading}>
             {isLoading ? (

@@ -1,6 +1,8 @@
 // src/views/HistoryView.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client'; // <-- IMPORT DU WEBSOCKET
+import { toast } from 'react-toastify'; // <-- IMPORT POUR LES NOTIFICATIONS
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -75,7 +77,7 @@ const HistoryView = () => {
           if (listGarbages.length > 0) {
             setSelectedDeveui(listGarbages[0].deveui);
           } else {
-            setIsLoading(false); // S'il n'y a pas de poubelle
+            setIsLoading(false);
           }
         }
       } catch (err) {
@@ -86,45 +88,105 @@ const HistoryView = () => {
     fetchGarbages();
   }, []);
 
-  // 2. CHARGEMENT DE L'HISTORIQUE (Dépend de la date ET de la poubelle)
-  useEffect(() => {
-    const fetchHistoryByDate = async () => {
-      if (!selectedDate || !selectedDeveui) {
-        setHistoryData([]);
-        return;
-      }
+  // FONCTION RÉUTILISABLE POUR CHARGER L'HISTORIQUE
+  const fetchHistoryByDate = async () => {
+    if (!selectedDate || !selectedDeveui) {
+      setHistoryData([]);
+      return;
+    }
 
-      setIsLoading(true);
+    setIsLoading(true);
 
-      try {
-        const token = localStorage.getItem('octo_token');
-        if (!token) return;
+    try {
+      const token = localStorage.getItem('octo_token');
+      if (!token) return;
 
-        // Requête avec date ET deveui
-        const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${selectedDate}&deveui=${selectedDeveui}`, {
-          method: 'GET',
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const donnees = await response.json();
-          setHistoryData(donnees);
-        } else {
-          setHistoryData([]);
+      const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${selectedDate}&deveui=${selectedDeveui}`, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      } catch (err) {
-        console.error("Erreur réseau :", err);
-        setHistoryData([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      });
 
+      if (response.ok) {
+        const donnees = await response.json();
+        setHistoryData(donnees);
+      } else {
+        setHistoryData([]);
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      setHistoryData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 2. CHARGEMENT INITIAL À LA SÉLECTION D'UNE DATE OU D'UNE POUBELLE
+  useEffect(() => {
     fetchHistoryByDate();
+    // eslint-disable-next-line
   }, [selectedDate, selectedDeveui]);
+
+  // 3. ÉCOUTE TEMPS RÉEL VIA WEBSOCKET
+  useEffect(() => {
+    if (!selectedDeveui) return;
+
+    const socket = io('http://192.168.1.143:5000');
+
+    socket.on('new_sensor_data', (data) => {
+      // On ne rafraîchit la page que si :
+      // 1. La donnée concerne la poubelle sélectionnée
+      // 2. L'utilisateur est en train de regarder l'historique d'aujourd'hui !
+      if (data.deveui === selectedDeveui && selectedDate === getTodayString()) {
+        console.log("🔔 WebSocket : Nouvelle pesée détectée ! Mise à jour de l'historique...");
+        fetchHistoryByDate();
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+    // eslint-disable-next-line
+  }, [selectedDeveui, selectedDate]);
+
+
+  // 4. FONCTION D'EXPORTATION CSV
+  const exportToCSV = () => {
+    if (historyData.length === 0) {
+      toast.info("Aucune donnée à exporter pour cette date.");
+      return;
+    }
+
+    // Création des en-têtes du fichier CSV (Séparateur point-virgule pour bien marcher sur Excel français)
+    let csvContent = "Date;Heure;Poids (kg);Statut\n";
+
+    // Ajout des lignes de données (On remet les données dans le bon sens chronologique)
+    const sortedData = [...historyData].reverse();
+    sortedData.forEach(item => {
+      const dateFormatee = formatDate(item.date);
+      // On remplace le point par une virgule pour que Excel comprenne que c'est un chiffre décimal en français
+      const poidsKg = (parseFloat(item.weight) / 1000).toFixed(2).replace('.', ',');
+      
+      csvContent += `${dateFormatee.jour};${dateFormatee.heure};${poidsKg};Synchronise\n`;
+    });
+
+    // Encodage spécial (BOM) pour gérer les accents français sur Excel
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); 
+    const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // Création d'un lien invisible pour déclencher le téléchargement
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `OctoSystem_Historique_${selectedDeveui}_${selectedDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success("Fichier Excel (CSV) exporté avec succès !");
+  };
 
   const chartDataPrep = [...historyData].reverse(); 
   
@@ -227,8 +289,23 @@ const HistoryView = () => {
               />
             </div>
 
-            <div style={styles.statsCount}>
-              <span>{historyData.length} mesure(s)</span>
+            {/* ZONE DES ACTIONS (Compteur + Bouton Export) */}
+            <div style={styles.actionGroup}>
+              <div style={styles.statsCount}>
+                <span>{historyData.length} mesure(s)</span>
+              </div>
+              <button 
+                onClick={exportToCSV} 
+                style={{
+                  ...styles.exportBtn, 
+                  opacity: historyData.length === 0 ? 0.5 : 1, 
+                  cursor: historyData.length === 0 ? 'not-allowed' : 'pointer'
+                }} 
+                disabled={historyData.length === 0}
+                title="Télécharger pour Excel"
+              >
+                <i className="fa-solid fa-file-csv"></i> Exporter
+              </button>
             </div>
           </div>
 
@@ -314,7 +391,10 @@ const styles = {
   dateInput: { padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-main)', color: 'var(--text-main)', fontFamily: 'inherit', cursor: 'pointer' },
   selectInput: { padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--primary)', background: 'var(--bg-main)', color: 'var(--text-main)', fontFamily: 'inherit', cursor: 'pointer', fontWeight: 'bold' },
   
+  actionGroup: { display: 'flex', alignItems: 'center', gap: '15px' },
   statsCount: { color: 'var(--primary)', fontSize: '0.9rem', fontWeight: 'bold', background: 'var(--bg-main)', padding: '6px 12px', borderRadius: '20px' },
+  exportBtn: { display: 'flex', alignItems: 'center', gap: '8px', background: '#27ae60', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', transition: '0.2s', fontSize: '0.9rem' },
+  
   card: { background: 'var(--bg-card)', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid var(--border-color)' },
   sectionTitle: { marginTop: 0, marginBottom: '20px', color: 'var(--text-main)', fontSize: '1.1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' },
   chartContainer: { height: '300px', width: '100%', position: 'relative' },

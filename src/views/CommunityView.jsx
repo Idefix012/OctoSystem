@@ -1,6 +1,7 @@
 // src/views/CommunityView.jsx
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import io from 'socket.io-client'; // <-- IMPORT DU WEBSOCKET
 import BadgeShowcase from './widgets/BadgeShowcase';
 import { calculateBadges } from '../controllers/badgeEngine';
 
@@ -14,7 +15,6 @@ const CommunityView = ({ user }) => {
   const [blockedList, setBlockedList] = useState([]);
   const [isViewingBlocked, setIsViewingBlocked] = useState(false);
 
-  // ÉTAT POUR LES BADGES SAUVEGARDÉS EN BDD
   const [ownedBadges, setOwnedBadges] = useState([]);
 
   const getNomDuMois = () => {
@@ -31,8 +31,9 @@ const CommunityView = ({ user }) => {
   const myRank = myProfile ? leaderboard.findIndex(p => p.isMe) + 1 : 0;
   const myFriendsCount = leaderboard.length > 0 ? leaderboard.length - 1 : 0;
 
-  // CHARGEMENT INITIAL (Amis et Classement)
+  // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET TEMPS RÉEL
   useEffect(() => {
+    // Fonction isolée pour pouvoir l'appeler au premier chargement ET via le WebSocket
     const fetchCommunityData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
@@ -60,17 +61,31 @@ const CommunityView = ({ user }) => {
       }
     };
 
+    // Appel initial pour charger la page
     fetchCommunityData();
+
+    // -- INTÉGRATION WEBSOCKET --
+    const socket = io('http://192.168.1.143:5000');
+
+    socket.on('new_sensor_data', () => {
+      console.log("🔔 WebSocket : Une poubelle du réseau a été mise à jour ! Actualisation du classement...");
+      fetchCommunityData();
+    });
+
+    // Nettoyage de la connexion quand on quitte la page Communauté
+    return () => {
+      socket.disconnect();
+    };
+
   }, [user]);
 
-// NOUVEAU : SYNCHRONISATION INTELLIGENTE DES BADGES
+  // 2. SYNCHRONISATION INTELLIGENTE DES BADGES
   useEffect(() => {
     const syncBadges = async () => {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
       try {
-        // 1. On récupère les badges PERMANENTS depuis la BDD
         const rep = await fetch(`http://192.168.1.143:5000/badges/owned`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -81,12 +96,10 @@ const CommunityView = ({ user }) => {
           dbBadges = data.owned_badges.map(b => b.label); 
         }
 
-        // 2. On passe nos stats dans le moteur pour voir ce qu'on mérite actuellement
         const badgesMerites = calculateBadges(myTotalKg, myRank, myFriendsCount);
-        let activeBadgeIds = [...dbBadges]; // On prépare la liste de tous les badges allumés à l'écran
+        let activeBadgeIds = [...dbBadges]; 
         
         for (const badge of badgesMerites) {
-          // CAS A : C'est un badge PERMANENT qu'on vient de gagner mais qui n'est pas en BDD
           if (badge.isPermanent && badge.unlocked && !dbBadges.includes(badge.id)) {
             const unlockRep = await fetch(`http://192.168.1.143:5000/badges/unlock`, {
               method: 'POST',
@@ -94,17 +107,15 @@ const CommunityView = ({ user }) => {
               body: JSON.stringify({ label: badge.id })
             });
             if (unlockRep.ok) {
-              activeBadgeIds.push(badge.id); // On l'allume
+              activeBadgeIds.push(badge.id);
               toast.success(`🏆 Nouveau trophée permanent : ${badge.name} !`);
             }
           } 
-          // CAS B : C'est un badge VOLATIL (Statut mensuel), on l'allume direct si la condition est bonne !
           else if (!badge.isPermanent && badge.unlocked) {
             activeBadgeIds.push(badge.id);
           }
         }
         
-        // On met à jour l'affichage visuel avec ce mix BDD / Live !
         setOwnedBadges(activeBadgeIds);
 
       } catch (err) {
@@ -254,7 +265,6 @@ const CommunityView = ({ user }) => {
         <button style={activeTab === 'leaderboard' ? styles.tabActive : styles.tab} onClick={() => {setActiveTab('leaderboard'); setIsViewingBlocked(false);}}>
           <i className="fa-solid fa-trophy"></i> Podium
         </button>
-        {/* NOUVEL ONGLET POUR LES BADGES */}
         <button style={activeTab === 'badges' ? styles.tabActive : styles.tab} onClick={() => {setActiveTab('badges'); setIsViewingBlocked(false);}}>
           <i className="fa-solid fa-medal"></i> Trophées
         </button>
@@ -311,7 +321,7 @@ const CommunityView = ({ user }) => {
           </div>
         )}
 
-        {/* NOUVEL ONGLET : VITRINE À TROPHÉES */}
+        {/* ONGLET : VITRINE À TROPHÉES */}
         {activeTab === 'badges' && (
           <div>
             <h2 style={styles.sectionTitle}>Ma Salle des Trophées</h2>
@@ -322,7 +332,7 @@ const CommunityView = ({ user }) => {
           </div>
         )}
 
-        {/* ONGLET 1.5 : LISTE DES AMIS / BLOQUÉS */}
+        {/* ONGLET : LISTE DES AMIS / BLOQUÉS */}
         {activeTab === 'friends' && (
           <div>
             {!isViewingBlocked ? (
@@ -381,7 +391,7 @@ const CommunityView = ({ user }) => {
           </div>
         )}
 
-        {/* ONGLET 2 : AJOUTER VIA CODE AMI */}
+        {/* ONGLET : AJOUTER VIA CODE AMI */}
         {activeTab === 'add' && (
           <div>
             <h2 style={styles.sectionTitle}>Réseau Éco-Citoyen</h2>
@@ -402,7 +412,7 @@ const CommunityView = ({ user }) => {
           </div>
         )}
 
-        {/* ONGLET 3 : DEMANDES EN ATTENTE */}
+        {/* ONGLET : DEMANDES EN ATTENTE */}
         {activeTab === 'requests' && (
           <div>
             <h2 style={styles.sectionTitle}>Invitations reçues</h2>
