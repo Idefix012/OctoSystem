@@ -1,35 +1,77 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+// src/App.jsx
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import './App.css';
+
+// --- Imports pour les Toasts ---
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+import { useLayoutController } from './controllers/useLayoutController';
+import HeaderView from './views/HeaderView';
+import SidebarView from './views/SidebarView';
+import DashboardView from './views/DashboardView';
+import HistoryView from './views/HistoryView';
+import CommunityView from './views/CommunityView';
+import SettingsView from './views/SettingsView';
+import LoginView from './views/LoginView';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { isSidebarOpen, toggleMenu, closeMenu, menuItems } = useLayoutController();
+  
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('octo_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
+  const handleLogout = () => {
+    localStorage.removeItem('octo_user');
+    localStorage.removeItem('octo_token');
+    setCurrentUser(null);
+  };
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      {/* LE CONTENEUR DES NOTIFICATIONS (Placé tout en haut pour fonctionner partout !) */}
+      <ToastContainer 
+        position="top-right" 
+        autoClose={3000} 
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        pauseOnHover
+        theme="colored"
+      />
+
+      {/* GESTION DE L'AFFICHAGE (Connecté ou non) */}
+      {!currentUser ? (
+        <LoginView onLoginSuccess={(userData) => setCurrentUser(userData)} />
+      ) : (
+        <Router>
+          <div className="app-container">
+            <SidebarView 
+              isOpen={isSidebarOpen} 
+              onClose={closeMenu} 
+              menuItems={menuItems} 
+            />
+
+            <div className="main-content">
+              <HeaderView onToggleMenu={toggleMenu} user={currentUser} />
+              
+              <main>
+                <Routes>
+                  <Route path="/" element={<DashboardView user={currentUser} />} />
+                  <Route path="/history" element={<HistoryView />} />
+                  <Route path="/community" element={<CommunityView user={currentUser} />} />
+                  <Route path="/settings" element={<SettingsView onLogout={handleLogout} user={currentUser} />} />
+                </Routes>
+              </main>
+            </div>
+          </div>
+        </Router>
+      )}
     </>
-  )
+  );
 }
 
-export default App
+export default App;
