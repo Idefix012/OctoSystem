@@ -8,6 +8,12 @@ import { calculateBadges } from '../controllers/badgeEngine';
 const CommunityView = ({ user }) => {
   const [activeTab, setActiveTab] = useState('leaderboard');
   
+  // NOUVEAUX STATES POUR LE CLASSEMENT DE VILLE
+  const [leaderboardTab, setLeaderboardTab] = useState('friends'); // 'friends' ou 'city'
+  const [cityLeaderboard, setCityLeaderboard] = useState([]);
+  const [timeframe, setTimeframe] = useState('month'); // 'day' ou 'month'
+  const [isLoadingCity, setIsLoadingCity] = useState(false);
+
   const [leaderboard, setLeaderboard] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [searchCode, setSearchCode] = useState('');
@@ -31,9 +37,8 @@ const CommunityView = ({ user }) => {
   const myRank = myProfile ? leaderboard.findIndex(p => p.isMe) + 1 : 0;
   const myFriendsCount = leaderboard.length > 0 ? leaderboard.length - 1 : 0;
 
-  // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET TEMPS RÉEL
+  // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET TEMPS RÉEL (Amis)
   useEffect(() => {
-    // Fonction isolée pour pouvoir l'appeler au premier chargement ET via le WebSocket
     const fetchCommunityData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
@@ -61,7 +66,6 @@ const CommunityView = ({ user }) => {
       }
     };
 
-    // Appel initial pour charger la page
     fetchCommunityData();
 
     // -- INTÉGRATION WEBSOCKET --
@@ -72,12 +76,36 @@ const CommunityView = ({ user }) => {
       fetchCommunityData();
     });
 
-    // Nettoyage de la connexion quand on quitte la page Communauté
     return () => {
       socket.disconnect();
     };
 
   }, [user]);
+
+  // NOUVEAU : 1.bis. FETCH DYNAMIQUE POUR LE CLASSEMENT DE LA VILLE
+  useEffect(() => {
+    const fetchCityLeaderboard = async () => {
+      if (leaderboardTab !== 'city') return;
+      setIsLoadingCity(true);
+      try {
+        const token = localStorage.getItem('octo_token');
+        const response = await fetch(`http://192.168.1.143:5000/city/leaderboard?period=${timeframe}`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCityLeaderboard(data.leaderboard || []);
+        }
+      } catch (err) {
+        console.error("Erreur récupération classement ville :", err);
+      } finally {
+        setIsLoadingCity(false);
+      }
+    };
+
+    fetchCityLeaderboard();
+  }, [leaderboardTab, timeframe]);
 
   // 2. SYNCHRONISATION INTELLIGENTE DES BADGES
   useEffect(() => {
@@ -285,38 +313,101 @@ const CommunityView = ({ user }) => {
         {/* ONGLET 1 : CLASSEMENT GAMIFIÉ */}
         {activeTab === 'leaderboard' && (
           <div>
-            <h2 style={styles.sectionTitle}>Podium de {getNomDuMois()}</h2>
-            
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
-              Celui qui a la barre la plus courte est le plus écologique ! 🌱
-            </p>
+            {/* NOUVEAU : En-tête avec les sous-onglets (Mes Amis / Ma Ville) */}
+            <div style={styles.leaderboardHeaderWrapper}>
+              <h2 style={{...styles.sectionTitle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0}}>
+                {leaderboardTab === 'friends' ? `Podium de ${getNomDuMois()}` : 'Classement Local'}
+              </h2>
+              <div style={styles.subTabButtons}>
+                <button style={leaderboardTab === 'friends' ? styles.subTabActive : styles.subTab} onClick={() => setLeaderboardTab('friends')}>
+                  Mes Amis
+                </button>
+                <button style={leaderboardTab === 'city' ? styles.subTabActive : styles.subTab} onClick={() => setLeaderboardTab('city')}>
+                  Ma Ville (Public)
+                </button>
+              </div>
+            </div>
 
-            {leaderboard.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Chargement des données...</p>
-            ) : (
-              leaderboard.map((person, index) => {
-                const percent = (person.totalKg / safeMaxWeight) * 100;
-                let barColor = '#2ecc71'; 
-                if (index === leaderboard.length - 1 && leaderboard.length > 1 && person.totalKg > 0) barColor = '#e74c3c'; 
-                else if (index > 0 && person.totalKg > 0) barColor = '#f39c12'; 
+            {/* SOUS-ONGLET : MES AMIS */}
+            {leaderboardTab === 'friends' && (
+              <>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
+                  Celui qui a la barre la plus courte est le plus écologique ! 🌱
+                </p>
 
-                return (
-                  <div key={person.id_user} style={{...styles.listItem, flexDirection: 'column', alignItems: 'stretch', backgroundColor: person.isMe ? 'var(--bg-main)' : 'transparent', borderLeft: person.isMe ? '4px solid var(--primary)' : '4px solid transparent'}}>
-                    <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: '10px' }}>
-                      <div style={styles.rankCircle}>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                {leaderboard.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Chargement des données...</p>
+                ) : (
+                  leaderboard.map((person, index) => {
+                    const percent = (person.totalKg / safeMaxWeight) * 100;
+                    let barColor = '#2ecc71'; 
+                    if (index === leaderboard.length - 1 && leaderboard.length > 1 && person.totalKg > 0) barColor = '#e74c3c'; 
+                    else if (index > 0 && person.totalKg > 0) barColor = '#f39c12'; 
+
+                    return (
+                      <div key={person.id_user} style={{...styles.listItem, flexDirection: 'column', alignItems: 'stretch', backgroundColor: person.isMe ? 'var(--bg-main)' : 'transparent', borderLeft: person.isMe ? '4px solid var(--primary)' : '4px solid transparent'}}>
+                        <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: '10px' }}>
+                          <div style={styles.rankCircle}>
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                          </div>
+                          <div style={{ flex: 1, marginLeft: '15px' }}>
+                            <strong>{person.first_name} {person.last_name} {person.isMe && '(Vous)'}</strong>
+                          </div>
+                          <div style={{...styles.scoreBadge, backgroundColor: barColor}}>{person.totalKg} kg</div>
+                        </div>
+                        <div style={styles.barTrack}>
+                          <div style={{...styles.barFill, width: `${percent}%`, backgroundColor: barColor}}></div>
+                        </div>
                       </div>
-                      <div style={{ flex: 1, marginLeft: '15px' }}>
-                        <strong>{person.first_name} {person.last_name} {person.isMe && '(Vous)'}</strong>
-                      </div>
-                      <div style={{...styles.scoreBadge, backgroundColor: barColor}}>{person.totalKg} kg</div>
-                    </div>
-                    <div style={styles.barTrack}>
-                      <div style={{...styles.barFill, width: `${percent}%`, backgroundColor: barColor}}></div>
-                    </div>
+                    );
+                  })
+                )}
+              </>
+            )}
+
+            {/* NOUVEAU : SOUS-ONGLET : VILLE */}
+            {leaderboardTab === 'city' && (
+              <div style={styles.cityLeaderboardList}>
+                
+                {/* Filtres Temporels */}
+                <div style={styles.timeframeFilterContainer}>
+                  <button style={timeframe === 'day' ? styles.timeBtnActive : styles.timeBtn} onClick={() => setTimeframe('day')}>
+                    Aujourd'hui
+                  </button>
+                  <button style={timeframe === 'month' ? styles.timeBtnActive : styles.timeBtn} onClick={() => setTimeframe('month')}>
+                    Ce Mois-ci
+                  </button>
+                </div>
+
+                <p style={styles.cityInfoText}>
+                  <i className="fa-solid fa-circle-info"></i> Seuls les foyers ayant accepté le partage public apparaissent ici.
+                </p>
+                
+                {isLoadingCity ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                    <i className="fa-solid fa-spinner fa-spin"></i> Chargement du classement...
+                  </p>
+                ) : cityLeaderboard.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px', background: 'var(--bg-main)', borderRadius: '12px' }}>
+                    <h3 style={{ color: 'var(--text-main)', margin: '0 0 10px 0' }}>Aucune donnée 📭</h3>
+                    <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+                      Personne n'a encore jeté de déchets {timeframe === 'day' ? "aujourd'hui" : "ce mois-ci"} avec le partage activé.
+                    </p>
                   </div>
-                );
-              })
+                ) : (
+                  cityLeaderboard.map((user, index) => (
+                    <div key={user.id_user} style={{...styles.cityLeaderboardItem, ...(user.isMe ? styles.cityHighlightMe : {})}}>
+                      <div style={styles.cityItemRank}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                      </div>
+                      <div style={styles.cityItemName}>
+                        {user.name} {user.isMe && <span style={{fontSize: '0.8rem', color: 'var(--primary)'}}>(Vous)</span>}
+                      </div>
+                      <div style={styles.cityItemScore}>{user.score} kg sauvés</div>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         )}
@@ -476,7 +567,25 @@ const styles = {
   barFill: { height: '100%', borderRadius: '4px', transition: 'width 1s ease-in-out, background-color 0.5s' },
   discreetLink: { background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem', marginTop: '25px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' },
   backBtn: { background: 'var(--bg-main)', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '15px', display: 'inline-flex', alignItems: 'center', gap: '8px' },
-  unblockBtn: { background: '#2ecc71', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }
+  unblockBtn: { background: '#2ecc71', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' },
+
+  // NOUVEAUX STYLES AJOUTÉS POUR LA VILLE :
+  leaderboardHeaderWrapper: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', flexWrap: 'wrap', gap: '15px' },
+  subTabButtons: { display: 'flex', gap: '10px', background: 'var(--bg-main)', padding: '5px', borderRadius: '8px' },
+  subTab: { padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'transparent', cursor: 'pointer', fontWeight: 'bold', color: 'var(--text-muted)', transition: 'all 0.2s ease' },
+  subTabActive: { padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
+  
+  timeframeFilterContainer: { display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '15px' },
+  timeBtn: { padding: '6px 15px', borderRadius: '20px', border: '1px solid var(--border-color)', background: 'var(--bg-main)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold', transition: '0.2s' },
+  timeBtnActive: { padding: '6px 15px', borderRadius: '20px', border: '1px solid var(--primary)', background: 'rgba(46, 204, 113, 0.1)', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' },
+
+  cityInfoText: { fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px', fontStyle: 'italic', textAlign: 'center' },
+  cityLeaderboardList: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  cityLeaderboardItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '12px', transition: 'transform 0.2s' },
+  cityHighlightMe: { backgroundColor: 'rgba(46, 204, 113, 0.1)', borderColor: 'var(--primary)', fontWeight: 'bold' },
+  cityItemRank: { width: '40px', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-muted)' },
+  cityItemName: { flex: 1, fontSize: '1rem', color: 'var(--text-main)', fontWeight: 'bold' },
+  cityItemScore: { fontWeight: 'bold', color: 'var(--primary)' }
 };
 
 export default CommunityView;

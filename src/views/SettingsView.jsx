@@ -23,6 +23,9 @@ const SettingsView = ({ onLogout, user }) => {
   const [newDeveui, setNewDeveui] = useState('');
 
   const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
+  
+  // NOUVEAU : State pour le consentement RGPD
+  const [isPubliclyShared, setIsPubliclyShared] = useState(user?.is_public || false);
 
   const toggleDarkMode = () => {
     const newMode = !darkMode;
@@ -218,6 +221,33 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
+  // NOUVEAU : Fonction pour gérer le toggle RGPD (Partage public)
+  const handleTogglePublicShare = async () => {
+    const newValue = !isPubliclyShared;
+    setIsPubliclyShared(newValue); 
+
+    try {
+      const token = localStorage.getItem('octo_token');
+      const response = await fetch(`http://192.168.1.143:5000/users/preferences`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ is_public: newValue })
+      });
+
+      if (response.ok) {
+        toast.success(newValue ? "Données partagées avec la ville (Anonymisées) !" : "Partage public désactivé.");
+      } else {
+        throw new Error("Erreur serveur");
+      }
+    } catch (err) {
+      setIsPubliclyShared(!newValue); 
+      toast.error("Impossible de sauvegarder vos préférences RGPD.");
+    }
+  };
+
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>Paramètres ⚙️</h1>
@@ -396,7 +426,7 @@ const SettingsView = ({ onLogout, user }) => {
         </form>
       </div>
 
-      {/* SECTION 4 : PRÉFÉRENCES */}
+      {/* SECTION 4 : PRÉFÉRENCES ET CONFIDENTIALITÉ */}
       <div className="settings-card" style={{ marginBottom: '30px' }}>
         <h3 style={{ borderBottom: '2px solid var(--border-color)', paddingBottom: '10px' }}>Préférences d'affichage</h3>
         <div className="setting-item">
@@ -406,6 +436,23 @@ const SettingsView = ({ onLogout, user }) => {
           </div>
           <label className="switch">
             <input type="checkbox" checked={darkMode} onChange={toggleDarkMode} />
+            <span className="slider"></span>
+          </label>
+        </div>
+
+        {/* NOUVEAU : Bloc Confidentialité (RGPD) */}
+        <h3 style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-color)', color: '#3498db' }}>
+          Confidentialité (RGPD)
+        </h3>
+        <div className="setting-item" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px' }}>
+          <div className="setting-info" style={{ flex: '1 1 300px' }}>
+            <h4 style={{ color: '#3498db' }}>Classement de la Ville (Octo'Community)</h4>
+            <p>
+              En activant cette option (Opt-in), vous acceptez que le poids de vos déchets (anonymisé avec la première lettre de votre nom) apparaisse dans le classement public de la ville.
+            </p>
+          </div>
+          <label className="switch">
+            <input type="checkbox" checked={isPubliclyShared} onChange={handleTogglePublicShare} />
             <span className="slider"></span>
           </label>
         </div>
