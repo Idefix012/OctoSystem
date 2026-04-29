@@ -1,19 +1,20 @@
 // src/views/CommunityView.jsx
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import io from 'socket.io-client'; // <-- IMPORT DU WEBSOCKET
+import io from 'socket.io-client';
 import BadgeShowcase from './widgets/BadgeShowcase';
 import { calculateBadges } from '../controllers/badgeEngine';
 
 const CommunityView = ({ user }) => {
   const [activeTab, setActiveTab] = useState('leaderboard');
   
-  // NOUVEAUX STATES POUR LE CLASSEMENT DE VILLE
-  const [leaderboardTab, setLeaderboardTab] = useState('friends'); // 'friends' ou 'city'
+  // États pour le classement
+  const [leaderboardTab, setLeaderboardTab] = useState('friends');
   const [cityLeaderboard, setCityLeaderboard] = useState([]);
-  const [timeframe, setTimeframe] = useState('month'); // 'day' ou 'month'
+  const [timeframe, setTimeframe] = useState('month');
   const [isLoadingCity, setIsLoadingCity] = useState(false);
 
+  // États pour le réseau social
   const [leaderboard, setLeaderboard] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [searchCode, setSearchCode] = useState('');
@@ -22,6 +23,10 @@ const CommunityView = ({ user }) => {
   const [isViewingBlocked, setIsViewingBlocked] = useState(false);
 
   const [ownedBadges, setOwnedBadges] = useState([]);
+  
+  // NOUVEAU : État pour la flamme (Streak)
+  const [myStreak, setMyStreak] = useState(0);
+  const [mySensorCount, setMySensorCount] = useState(0);
 
   const getNomDuMois = () => {
     const mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -37,7 +42,13 @@ const CommunityView = ({ user }) => {
   const myRank = myProfile ? leaderboard.findIndex(p => p.isMe) + 1 : 0;
   const myFriendsCount = leaderboard.length > 0 ? leaderboard.length - 1 : 0;
 
-  // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET TEMPS RÉEL (Amis)
+  const myCityProfile = cityLeaderboard.find(p => p.isMe);
+  const myCityRank = myCityProfile ? myCityProfile.rank : 0;
+
+  const myHouseholdSize = user?.household_size || 1;
+  const myLastThrowDate = null; // Prêt pour l'historique dans la V2
+
+  // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET
   useEffect(() => {
     const fetchCommunityData = async () => {
       try {
@@ -45,7 +56,6 @@ const CommunityView = ({ user }) => {
         if (!token) return;
 
         const repRequests = await fetch(`http://192.168.1.143:5000/friends/requests`, {
-          method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (repRequests.ok) {
@@ -54,13 +64,24 @@ const CommunityView = ({ user }) => {
         }
 
         const repLeaderboard = await fetch(`http://192.168.1.143:5000/friends`, {
-          method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (repLeaderboard.ok) {
           const dataLeaderboard = await repLeaderboard.json();
           setLeaderboard(dataLeaderboard || []);
         }
+
+        // Récupération de la Flamme (Streak)
+        const repStreak = await fetch(`http://192.168.1.143:5000/user/streak`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (repStreak.ok) {
+          const dataStreak = await repStreak.json();
+          setMyStreak(dataStreak.streak || 0);
+          setMySensorCount(dataStreak.sensor_count || 0);
+        }
+
       } catch (err) {
         console.error("Erreur réseau Communauté :", err);
       }
@@ -68,11 +89,9 @@ const CommunityView = ({ user }) => {
 
     fetchCommunityData();
 
-    // -- INTÉGRATION WEBSOCKET --
     const socket = io('http://192.168.1.143:5000');
-
     socket.on('new_sensor_data', () => {
-      console.log("🔔 WebSocket : Une poubelle du réseau a été mise à jour ! Actualisation du classement...");
+      console.log("🔔 WebSocket : Une poubelle a été mise à jour ! Actualisation...");
       fetchCommunityData();
     });
 
@@ -82,7 +101,7 @@ const CommunityView = ({ user }) => {
 
   }, [user]);
 
-  // NOUVEAU : 1.bis. FETCH DYNAMIQUE POUR LE CLASSEMENT DE LA VILLE
+  // 1.bis. FETCH DYNAMIQUE POUR LE CLASSEMENT DE LA VILLE
   useEffect(() => {
     const fetchCityLeaderboard = async () => {
       if (leaderboardTab !== 'city') return;
@@ -124,7 +143,8 @@ const CommunityView = ({ user }) => {
           dbBadges = data.owned_badges.map(b => b.label); 
         }
 
-        const badgesMerites = calculateBadges(myTotalKg, myRank, myFriendsCount);
+        // Appel du moteur avec TOUTES les nouvelles variables (incluant myStreak)
+        const badgesMerites = calculateBadges(myTotalKg, myRank, myFriendsCount, myCityRank, myHouseholdSize, mySensorCount, myLastThrowDate, myStreak);
         let activeBadgeIds = [...dbBadges]; 
         
         for (const badge of badgesMerites) {
@@ -154,7 +174,7 @@ const CommunityView = ({ user }) => {
     if (leaderboard.length > 0) {
       syncBadges();
     }
-  }, [leaderboard, myTotalKg, myRank, myFriendsCount]);
+  }, [leaderboard, myTotalKg, myRank, myFriendsCount, myCityRank, myHouseholdSize, mySensorCount, myLastThrowDate, myStreak]);
 
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
@@ -313,7 +333,6 @@ const CommunityView = ({ user }) => {
         {/* ONGLET 1 : CLASSEMENT GAMIFIÉ */}
         {activeTab === 'leaderboard' && (
           <div>
-            {/* NOUVEAU : En-tête avec les sous-onglets (Mes Amis / Ma Ville) */}
             <div style={styles.leaderboardHeaderWrapper}>
               <h2 style={{...styles.sectionTitle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0}}>
                 {leaderboardTab === 'friends' ? `Podium de ${getNomDuMois()}` : 'Classement Local'}
@@ -365,7 +384,7 @@ const CommunityView = ({ user }) => {
               </>
             )}
 
-            {/* NOUVEAU : SOUS-ONGLET : VILLE */}
+            {/* SOUS-ONGLET : VILLE */}
             {leaderboardTab === 'city' && (
               <div style={styles.cityLeaderboardList}>
                 
@@ -419,7 +438,18 @@ const CommunityView = ({ user }) => {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
               Retrouvez ici l'ensemble des récompenses que vous avez débloquées grâce à vos actions éco-citoyennes.
             </p>
-            <BadgeShowcase ownedBadges={ownedBadges} />
+            {/* INJECTION DE TOUTES LES DONNÉES DANS LA VITRINE */}
+            <BadgeShowcase 
+                ownedBadges={ownedBadges} 
+                totalKg={myTotalKg} 
+                rank={myRank} 
+                friendsCount={myFriendsCount} 
+                cityRank={myCityRank} 
+                householdSize={myHouseholdSize}
+                sensorCount={mySensorCount}
+                lastThrowDate={myLastThrowDate}
+                streakDays={myStreak}
+            />
           </div>
         )}
 
@@ -569,7 +599,6 @@ const styles = {
   backBtn: { background: 'var(--bg-main)', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '15px', display: 'inline-flex', alignItems: 'center', gap: '8px' },
   unblockBtn: { background: '#2ecc71', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' },
 
-  // NOUVEAUX STYLES AJOUTÉS POUR LA VILLE :
   leaderboardHeaderWrapper: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', flexWrap: 'wrap', gap: '15px' },
   subTabButtons: { display: 'flex', gap: '10px', background: 'var(--bg-main)', padding: '5px', borderRadius: '8px' },
   subTab: { padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'transparent', cursor: 'pointer', fontWeight: 'bold', color: 'var(--text-muted)', transition: 'all 0.2s ease' },
