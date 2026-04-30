@@ -61,6 +61,14 @@ body {
 .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; font-size: 1.2rem; }
 .close-btn { background: none; border: none; color: white; font-size: 2rem; cursor: pointer; display: none; }
 
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+  list-style: none; 
+}
+
 .nav-links li { padding: 15px 10px; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; gap: 15px; align-items: center; }
 .nav-links li:hover, .nav-links li.active { background-color: rgba(255,255,255,0.1); color: var(--primary); }
 .sidebar-footer { margin-top: auto; font-size: 0.8rem; color: #666; text-align: center; }
