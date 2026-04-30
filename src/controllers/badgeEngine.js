@@ -78,15 +78,50 @@ export const calculateBadges = (totalKg, rank, friendsCount, cityRank, household
   }
 
   // --- ASSEMBLAGE ---
+  // --- ASSEMBLAGE ---
   return [
-    { id: 'starter', name: 'Premier pas 🌱', description: 'Inscription au réseau éco-citoyen.', icon: 'fa-seedling', color: '#2ecc71', isPermanent: true, unlocked: true },
-    { id: 'prog_friends', isProgressive: true, level: frLvl, name: frName, icon: frIcon, color: frColor, progressLabel: frLabel, progressPercent: frPercent, unlocked: frLvl > 0 },
-    { id: 'prog_weight', isProgressive: true, level: wtLvl, name: wtName, icon: wtIcon, color: wtColor, progressLabel: wtLabel, progressPercent: wtPercent, isDanger: wtDanger, unlocked: wtLvl > 0 },
-    { id: 'prog_min', isProgressive: true, level: minLvl, name: minName, icon: minIcon, color: minColor, progressLabel: minLabel, progressPercent: minPercent, isDanger: minPercent > 80, unlocked: minLvl > 0 },
-    { id: 'prog_comp', isProgressive: true, level: compLvl, name: compName, icon: compIcon, color: compColor, progressLabel: compLabel, progressPercent: compPercent, unlocked: compLvl > 0 },
-    { id: 'prog_city', isProgressive: true, level: cityLvl, name: cityName, icon: cityIcon, color: cityColor, progressLabel: cityLabel, progressPercent: cityPercent, unlocked: cityLvl > 0 },
-    { id: 'prog_sens', isProgressive: true, level: sensLvl, name: sensName, icon: sensIcon, color: sensColor, progressLabel: sensLabel, progressPercent: sensPercent, unlocked: sensLvl > 0 },
-    { id: 'prog_streak', isProgressive: true, level: streakLvl, name: streakName, icon: streakIcon, color: streakColor, progressLabel: streakLabel, progressPercent: streakPercent, unlocked: streakLvl > 0 },
-    { id: 'easter_time', isProgressive: false, name: timeName, icon: timeIcon, color: timeColor, description: timeDesc, unlocked: timeUnlocked }
+    { 
+      id: 'starter', name: 'Premier pas 🌱', description: 'Inscription au réseau éco-citoyen.', icon: 'fa-seedling', color: '#2ecc71', isPermanent: true, unlocked: true 
+    },
+    { 
+      id: 'prog_friends', isProgressive: true, level: frLvl, name: frName, 
+      description: 'Ajoutez des amis pour vous motiver ensemble.', // <- AJOUTÉ
+      icon: frIcon, color: frColor, progressLabel: frLabel, progressPercent: frPercent, unlocked: frLvl > 0 
+    },
+    { 
+      id: 'prog_weight', isProgressive: true, level: wtLvl, name: wtName, 
+      description: 'Maintenez vos déchets mensuels sous le seuil critique.', // <- AJOUTÉ
+      icon: wtIcon, color: wtColor, progressLabel: wtLabel, progressPercent: wtPercent, isDanger: wtDanger, unlocked: wtLvl > 0 
+    },
+    { 
+      id: 'prog_min', isProgressive: true, level: minLvl, name: minName, 
+      description: 'Réduisez le ratio de déchets par personne dans votre foyer.', // <- AJOUTÉ
+      icon: minIcon, color: minColor, progressLabel: minLabel, progressPercent: minPercent, isDanger: minPercent > 80, unlocked: minLvl > 0 
+    },
+    { 
+      id: 'prog_comp', isProgressive: true, level: compLvl, name: compName, 
+      description: 'Grimpez dans le classement face à vos amis.', // <- AJOUTÉ
+      icon: compIcon, color: compColor, progressLabel: compLabel, progressPercent: compPercent, unlocked: compLvl > 0 
+    },
+    { 
+      id: 'prog_city', isProgressive: true, level: cityLvl, name: cityName, 
+      description: 'Hissez-vous au sommet du classement public de la ville.', // <- AJOUTÉ
+      icon: cityIcon, color: cityColor, progressLabel: cityLabel, progressPercent: cityPercent, unlocked: cityLvl > 0 
+    },
+    { 
+      id: 'prog_sens', isProgressive: true, level: sensLvl, name: sensName, 
+      description: 'Associez des capteurs OctoSystem à votre compte.', // <- AJOUTÉ
+      icon: sensIcon, color: sensColor, progressLabel: sensLabel, progressPercent: sensPercent, unlocked: sensLvl > 0 
+    },
+    { 
+      id: 'prog_streak', isProgressive: true, level: streakLvl, name: streakName, 
+      description: 'Utilisez régulièrement votre poubelle (jours consécutifs).', // <- AJOUTÉ
+      icon: streakIcon, color: streakColor, progressLabel: streakLabel, progressPercent: streakPercent, unlocked: streakLvl > 0 
+    },
+    { 
+      id: 'easter_time', isProgressive: false, name: timeName, 
+      description: timeDesc, // (Déjà géré dynamiquement dans le if/else)
+      icon: timeIcon, color: timeColor, unlocked: timeUnlocked 
+    }
   ];
 };

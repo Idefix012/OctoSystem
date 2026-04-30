@@ -22,18 +22,30 @@ const SettingsView = ({ onLogout, user }) => {
 
   const [newDeveui, setNewDeveui] = useState('');
 
-  const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('octo_theme') === 'dark';
+  });
   
-  // NOUVEAU : State pour le consentement RGPD
-  const [isPubliclyShared, setIsPubliclyShared] = useState(user?.is_public || false);
+  // CORRECTION : Initialisation intelligente du consentement RGPD
+  const [isPubliclyShared, setIsPubliclyShared] = useState(() => {
+    // 1. On vérifie s'il y a une sauvegarde locale forcée pour cet utilisateur précis
+    const saved = localStorage.getItem(`octo_rgpd_${user?.id_user}`);
+    if (saved !== null) return saved === 'true';
+    
+    // 2. Sinon on prend la valeur de la base de données (gère les true/false et les 1/0 de MySQL)
+    return user?.is_public === 1 || user?.is_public === true;
+  });
 
   const toggleDarkMode = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
+    
     if (newMode) {
       document.body.classList.add('dark-mode');
+      localStorage.setItem('octo_theme', 'dark'); 
     } else {
       document.body.classList.remove('dark-mode');
+      localStorage.setItem('octo_theme', 'light'); 
     }
   };
 
@@ -221,7 +233,7 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
-  // NOUVEAU : Fonction pour gérer le toggle RGPD (Partage public)
+  // CORRECTION : Forçage de la sauvegarde locale du choix RGPD
   const handleTogglePublicShare = async () => {
     const newValue = !isPubliclyShared;
     setIsPubliclyShared(newValue); 
@@ -238,6 +250,12 @@ const SettingsView = ({ onLogout, user }) => {
       });
 
       if (response.ok) {
+        if (user) {
+          user.is_public = newValue;
+        }
+        // C'est cette ligne qui garantit que le bouton survivra aux changements de page
+        localStorage.setItem(`octo_rgpd_${user?.id_user}`, newValue);
+        
         toast.success(newValue ? "Données partagées avec la ville (Anonymisées) !" : "Partage public désactivé.");
       } else {
         throw new Error("Erreur serveur");
@@ -440,7 +458,7 @@ const SettingsView = ({ onLogout, user }) => {
           </label>
         </div>
 
-        {/* NOUVEAU : Bloc Confidentialité (RGPD) */}
+        {/* Bloc Confidentialité (RGPD) */}
         <h3 style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-color)', color: '#3498db' }}>
           Confidentialité (RGPD)
         </h3>

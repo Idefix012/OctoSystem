@@ -27,6 +27,7 @@ const CommunityView = ({ user }) => {
   // NOUVEAU : État pour la flamme (Streak)
   const [myStreak, setMyStreak] = useState(0);
   const [mySensorCount, setMySensorCount] = useState(0);
+  const [myLastThrowDate, setMyLastThrowDate] = useState(null);
 
   const getNomDuMois = () => {
     const mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -46,7 +47,6 @@ const CommunityView = ({ user }) => {
   const myCityRank = myCityProfile ? myCityProfile.rank : 0;
 
   const myHouseholdSize = user?.household_size || 1;
-  const myLastThrowDate = null; // Prêt pour l'historique dans la V2
 
   // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET
   useEffect(() => {
@@ -80,6 +80,7 @@ const CommunityView = ({ user }) => {
           const dataStreak = await repStreak.json();
           setMyStreak(dataStreak.streak || 0);
           setMySensorCount(dataStreak.sensor_count || 0);
+          setMyLastThrowDate(dataStreak.last_throw_date || null); // <-- LIGNE À AJOUTER
         }
 
       } catch (err) {
@@ -104,7 +105,7 @@ const CommunityView = ({ user }) => {
   // 1.bis. FETCH DYNAMIQUE POUR LE CLASSEMENT DE LA VILLE
   useEffect(() => {
     const fetchCityLeaderboard = async () => {
-      if (leaderboardTab !== 'city') return;
+      // CORRECTION : On a supprimé le "if (leaderboardTab !== 'city') return;"
       setIsLoadingCity(true);
       try {
         const token = localStorage.getItem('octo_token');
@@ -124,7 +125,7 @@ const CommunityView = ({ user }) => {
     };
 
     fetchCityLeaderboard();
-  }, [leaderboardTab, timeframe]);
+  }, [timeframe]); // CORRECTION : On a aussi retiré 'leaderboardTab' de ce tableau à la fin
 
   // 2. SYNCHRONISATION INTELLIGENTE DES BADGES
   useEffect(() => {

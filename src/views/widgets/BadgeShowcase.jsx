@@ -42,12 +42,21 @@ const BadgeShowcase = ({ ownedBadges = [], totalKg = 0, rank = 0, friendsCount =
             </div>
             
             <div style={styles.badgeInfo}>
-              <h4 style={styles.badgeName}>
-                {badge.name}
-                {!badge.unlocked && <i className="fa-solid fa-lock" style={styles.lockIcon}></i>}
-              </h4>
               
-              {/* LA CORRECTION EST ICI : On utilise progressLabel et progressPercent */}
+              {/* NOUVEAU : Ligne contenant le nom ET l'icône d'information */}
+              <div style={styles.badgeNameRow}>
+                <h4 style={styles.badgeName}>
+                  {badge.name}
+                  {!badge.unlocked && <i className="fa-solid fa-lock" style={styles.lockIcon}></i>}
+                </h4>
+                
+                {/* Le petit "i" avec l'info-bulle (tooltip native) */}
+                <span title={badge.description} style={styles.infoIcon}>
+                  <i className="fa-solid fa-circle-info"></i>
+                </span>
+              </div>
+              
+              {/* AFFICHAGE DE LA PROGRESSION OU DE LA DESCRIPTION DE BASE */}
               {badge.isProgressive ? (
                 <div style={styles.progressContainer}>
                   <div style={styles.progressHeader}>
@@ -83,8 +92,14 @@ const styles = {
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '15px' },
   badgeItem: { display: 'flex', alignItems: 'center', gap: '15px', padding: '15px', borderRadius: '12px', border: '1px solid', transition: 'all 0.3s ease' },
   iconWrapper: { width: '45px', height: '45px', borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: '1.2rem', flexShrink: 0 },
-  badgeInfo: { display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 },
+  
+  badgeInfo: { display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 },
+  
+  // Nouveaux styles pour l'en-tête du badge
+  badgeNameRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' },
   badgeName: { margin: 0, fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' },
+  infoIcon: { fontSize: '1rem', color: 'var(--text-muted)', cursor: 'help', transition: 'color 0.2s', paddingLeft: '5px' },
+  
   badgeDesc: { margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.3' },
   lockIcon: { fontSize: '0.7rem', color: 'var(--text-muted)' },
   

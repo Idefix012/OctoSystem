@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
 
@@ -17,6 +17,15 @@ import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 
 function App() {
+  useEffect(() => {
+    // Vérification du thème au chargement de l'app
+    const savedTheme = localStorage.getItem('octo_theme');
+    if (savedTheme === 'dark') {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  }, []);
   const { isSidebarOpen, toggleMenu, closeMenu, menuItems } = useLayoutController();
   
   const [currentUser, setCurrentUser] = useState(() => {
