@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
 
-// --- Imports pour les Toasts ---
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -18,7 +17,6 @@ import LoginView from './views/LoginView';
 
 function App() {
   useEffect(() => {
-    // Vérification du thème au chargement de l'app
     const savedTheme = localStorage.getItem('octo_theme');
     if (savedTheme === 'dark') {
       document.body.classList.add('dark-mode');
@@ -26,6 +24,7 @@ function App() {
       document.body.classList.remove('dark-mode');
     }
   }, []);
+  
   const { isSidebarOpen, toggleMenu, closeMenu, menuItems } = useLayoutController();
   
   const [currentUser, setCurrentUser] = useState(() => {
@@ -39,30 +38,22 @@ function App() {
     setCurrentUser(null);
   };
 
+  // NOUVEAU : Fonction pour forcer la mise à jour globale en temps réel
+  const handleUpdateUser = (updatedUser) => {
+    localStorage.setItem('octo_user', JSON.stringify(updatedUser));
+    setCurrentUser(updatedUser);
+  };
+
   return (
     <>
-      {/* LE CONTENEUR DES NOTIFICATIONS (Placé tout en haut pour fonctionner partout !) */}
-      <ToastContainer 
-        position="top-right" 
-        autoClose={3000} 
-        hideProgressBar={false}
-        newestOnTop={true}
-        closeOnClick
-        pauseOnHover
-        theme="colored"
-      />
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={true} closeOnClick pauseOnHover theme="colored" />
 
-      {/* GESTION DE L'AFFICHAGE (Connecté ou non) */}
       {!currentUser ? (
-        <LoginView onLoginSuccess={(userData) => setCurrentUser(userData)} />
+        <LoginView onLoginSuccess={(userData) => handleUpdateUser(userData)} />
       ) : (
         <Router>
           <div className="app-container">
-            <SidebarView 
-              isOpen={isSidebarOpen} 
-              onClose={closeMenu} 
-              menuItems={menuItems} 
-            />
+            <SidebarView isOpen={isSidebarOpen} onClose={closeMenu} menuItems={menuItems} />
 
             <div className="main-content">
               <HeaderView onToggleMenu={toggleMenu} user={currentUser} />
@@ -72,7 +63,11 @@ function App() {
                   <Route path="/" element={<DashboardView user={currentUser} />} />
                   <Route path="/history" element={<HistoryView />} />
                   <Route path="/community" element={<CommunityView user={currentUser} />} />
-                  <Route path="/settings" element={<SettingsView onLogout={handleLogout} user={currentUser} />} />
+                  
+                  {/* CORRECTION : On passe 'onUpdateUser' aux paramètres ! */}
+                  <Route path="/settings" element={
+                    <SettingsView onLogout={handleLogout} user={currentUser} onUpdateUser={handleUpdateUser} />
+                  } />
                 </Routes>
               </main>
             </div>

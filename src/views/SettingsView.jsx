@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify'; 
 
-const SettingsView = ({ onLogout, user }) => {
+const SettingsView = ({ onLogout, user, onUpdateUser }) => {
   const [firstName, setFirstName] = useState(user?.first_name || '');
   const [lastName, setLastName] = useState(user?.last_name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -250,13 +250,16 @@ const SettingsView = ({ onLogout, user }) => {
       });
 
       if (response.ok) {
-        if (user) {
-          user.is_public = newValue;
+        
+        // LA MAGIE EST LÀ : On prévient App.jsx de la modification instantanément
+        if (onUpdateUser) {
+          onUpdateUser({ ...user, is_public: newValue });
         }
-        // C'est cette ligne qui garantit que le bouton survivra aux changements de page
+        
+        // Sauvegarde de secours (comme avant)
         localStorage.setItem(`octo_rgpd_${user?.id_user}`, newValue);
         
-        toast.success(newValue ? "Données partagées avec la ville (Anonymisées) !" : "Partage public désactivé.");
+        toast.success(newValue ? "Données partagées avec la ville !" : "Partage public désactivé.");
       } else {
         throw new Error("Erreur serveur");
       }
