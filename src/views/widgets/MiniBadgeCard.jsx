@@ -3,19 +3,31 @@ import React from 'react';
 import { calculateBadges } from '../../controllers/badgeEngine';
 import { useNavigate } from 'react-router-dom';
 
+/**
+ * Composant MiniBadgeCard
+ * Affiche un aperçu rapide (widget) de la progression de l'utilisateur dans le système de gamification.
+ * Ce composant est conçu pour s'intégrer dans le tableau de bord principal.
+ */
 const MiniBadgeCard = ({ totalKg, rank, friendsCount }) => {
+  // Initialisation du hook de navigation de React Router pour permettre la redirection au clic
   const navigate = useNavigate();
+  
+  // Appel du contrôleur métier pour récupérer la liste complète des badges et leur statut actuel
+  // basé sur les statistiques fournies en props (totalKg, rank, friendsCount).
   const badges = calculateBadges(totalKg, rank, friendsCount);
 
-  // Séparation logique : débloqués vs verrouillés
+  // Séparation logique : création de deux tableaux distincts pour séparer les badges débloqués des badges verrouillés
   const unlockedBadges = badges.filter(b => b.unlocked);
   const lockedBadges = badges.filter(b => !b.unlocked);
 
-  // On prend le dernier débloqué, et le premier verrouillé (prochain objectif)
+  // Extraction des données spécifiques pour l'affichage :
+  // On récupère le dernier élément du tableau des badges débloqués pour afficher l'accomplissement le plus récent.
   const latestBadge = unlockedBadges[unlockedBadges.length - 1];
+  // On récupère le premier élément du tableau des badges verrouillés pour afficher le prochain objectif à atteindre.
   const nextBadge = lockedBadges.length > 0 ? lockedBadges[0] : null;
 
   return (
+    // Le conteneur principal capture l'événement onClick pour rediriger l'utilisateur vers la vue détaillée (/community)
     <div style={styles.card} onClick={() => navigate('/community')} title="Voir tous mes trophées">
       <div style={styles.header}>
         <h4 style={styles.title}>MES TROPHÉES</h4>
@@ -25,7 +37,7 @@ const MiniBadgeCard = ({ totalKg, rank, friendsCount }) => {
       </div>
 
       <div style={styles.content}>
-        {/* Affichage du dernier badge débloqué */}
+        {/* Rendu conditionnel : s'affiche uniquement si l'utilisateur a débloqué au moins un badge */}
         {latestBadge && (
           <div style={styles.badgeRow}>
             <div style={{...styles.iconWrapper, background: latestBadge.color, color: 'white'}}>
@@ -38,7 +50,8 @@ const MiniBadgeCard = ({ totalKg, rank, friendsCount }) => {
           </div>
         )}
 
-        {/* Affichage du prochain objectif */}
+        {/* Rendu conditionnel : s'affiche si un badge reste à débloquer, 
+            sinon affiche un message de complétion totale (branche false du ternaire) */}
         {nextBadge ? (
           <div style={{...styles.badgeRow, opacity: 0.6, marginTop: '10px'}}>
             <div style={{...styles.iconWrapper, background: 'var(--border-color)', color: 'var(--text-muted)'}}>
