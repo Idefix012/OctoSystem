@@ -1,46 +1,83 @@
 // src/views/CommunityView.jsx
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import io from 'socket.io-client'; // <-- IMPORT DU WEBSOCKET
+// Import du client WebSocket pour la communication bidirectionnelle en temps réel avec le serveur.
+import io from 'socket.io-client';
 import BadgeShowcase from './widgets/BadgeShowcase';
+// Importation du contrôleur métier gérant la logique d'attribution des badges.
 import { calculateBadges } from '../controllers/badgeEngine';
 
+/**
+ * Composant CommunityView
+ * Gère l'interface sociale et de gamification de l'application.
+ * Orchestre les classements, le système d'amis, les demandes et le déblocage des badges.
+ */
 const CommunityView = ({ user }) => {
+  // État local gérant la navigation entre les onglets principaux.
   const [activeTab, setActiveTab] = useState('leaderboard');
   
+  // États locaux dédiés à l'affichage des différents classements (amis ou ville) et à leur filtrage temporel.
+  const [leaderboardTab, setLeaderboardTab] = useState('friends');
+  const [cityLeaderboard, setCityLeaderboard] = useState([]);
+  const [timeframe, setTimeframe] = useState('month');
+  const [isLoadingCity, setIsLoadingCity] = useState(false);
+
+  // États locaux gérant le graphe social de l'utilisateur (amis, demandes en attente).
   const [leaderboard, setLeaderboard] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [searchCode, setSearchCode] = useState('');
   
+  // États locaux relatifs à la modération et au contrôle d'accès (ACL).
   const [blockedList, setBlockedList] = useState([]);
   const [isViewingBlocked, setIsViewingBlocked] = useState(false);
 
+  // État local stockant les identifiants des badges persistés en base de données pour l'utilisateur.
   const [ownedBadges, setOwnedBadges] = useState([]);
+  
+  // NOUVEAU : États stockant les métriques d'engagement (Streak) et les données matérielles.
+  const [myStreak, setMyStreak] = useState(0);
+  const [mySensorCount, setMySensorCount] = useState(0);
+  const [myLastThrowDate, setMyLastThrowDate] = useState(null);
 
+  /**
+   * Retourne le nom du mois en cours en français pour l'affichage dynamique des titres.
+   */
   const getNomDuMois = () => {
     const mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
     return mois[new Date().getMonth()];
   };
 
+  // Calculs préparatoires pour l'affichage des jauges de comparaison (normalisation des barres de progression).
   const maxWeight = leaderboard.length > 0 ? Math.max(...leaderboard.map(p => p.totalKg)) : 1;
   const safeMaxWeight = maxWeight > 0 ? maxWeight : 1;
 
   // --- CALCUL DES STATS DU JOUEUR ---
+  // Extraction des données de l'utilisateur courant à partir du classement global 
+  // pour les injecter en tant que props dans le moteur de badges.
   const myProfile = leaderboard.find(p => p.isMe);
   const myTotalKg = myProfile ? myProfile.totalKg : 0;
   const myRank = myProfile ? leaderboard.findIndex(p => p.isMe) + 1 : 0;
   const myFriendsCount = leaderboard.length > 0 ? leaderboard.length - 1 : 0;
 
-  // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET TEMPS RÉEL
+  const myCityProfile = cityLeaderboard.find(p => p.isMe);
+  const myCityRank = myCityProfile ? myCityProfile.rank : 0;
+
+  // Récupération de la taille du foyer depuis l'objet utilisateur global (par défaut 1 pour éviter les divisions par zéro).
+  const myHouseholdSize = user?.household_size || 1;
+
+  // 1. CHARGEMENT INITIAL ET ÉCOUTE WEBSOCKET
   useEffect(() => {
-    // Fonction isolée pour pouvoir l'appeler au premier chargement ET via le WebSocket
+    /**
+     * Fonction asynchrone orchestrant le téléchargement de l'ensemble des données communautaires
+     * (requêtes d'amis, classement et statistiques d'engagement).
+     */
     const fetchCommunityData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
 
+        // Requête HTTP GET pour récupérer les demandes d'amis en attente.
         const repRequests = await fetch(`http://192.168.1.143:5000/friends/requests`, {
-          method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (repRequests.ok) {
@@ -48,44 +85,89 @@ const CommunityView = ({ user }) => {
           setPendingRequests(dataRequests.requests || []); 
         }
 
+        // Requête HTTP GET pour récupérer le classement du réseau de l'utilisateur.
         const repLeaderboard = await fetch(`http://192.168.1.143:5000/friends`, {
-          method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (repLeaderboard.ok) {
           const dataLeaderboard = await repLeaderboard.json();
           setLeaderboard(dataLeaderboard || []);
         }
+
+        // Requête HTTP GET pour récupérer les métriques d'engagement (Flamme, nombre de capteurs).
+        const repStreak = await fetch(`http://192.168.1.143:5000/user/streak`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (repStreak.ok) {
+          const dataStreak = await repStreak.json();
+          setMyStreak(dataStreak.streak || 0);
+          setMySensorCount(dataStreak.sensor_count || 0);
+          setMyLastThrowDate(dataStreak.last_throw_date || null); // <-- LIGNE À AJOUTER
+        }
+
       } catch (err) {
         console.error("Erreur réseau Communauté :", err);
       }
     };
 
-    // Appel initial pour charger la page
     fetchCommunityData();
 
-    // -- INTÉGRATION WEBSOCKET --
+    // Initialisation de la connexion WebSocket pour écouter les événements de mise à jour des capteurs
+    // et déclencher un rafraîchissement réactif de l'interface.
     const socket = io('http://192.168.1.143:5000');
-
     socket.on('new_sensor_data', () => {
-      console.log("🔔 WebSocket : Une poubelle du réseau a été mise à jour ! Actualisation du classement...");
+      console.log("🔔 WebSocket : Une poubelle a été mise à jour ! Actualisation...");
       fetchCommunityData();
     });
 
-    // Nettoyage de la connexion quand on quitte la page Communauté
+    // Fonction de nettoyage exécutée lors du démontage du composant pour prévenir les fuites de mémoire (Memory Leak).
     return () => {
       socket.disconnect();
     };
 
   }, [user]);
 
+  // 1.bis. FETCH DYNAMIQUE POUR LE CLASSEMENT DE LA VILLE
+  useEffect(() => {
+    /**
+     * Fonction asynchrone dédiée au chargement du classement de la ville en fonction du filtre temporel sélectionné.
+     */
+    const fetchCityLeaderboard = async () => {
+      // CORRECTION : On a supprimé le "if (leaderboardTab !== 'city') return;"
+      setIsLoadingCity(true);
+      try {
+        const token = localStorage.getItem('octo_token');
+        const response = await fetch(`http://192.168.1.143:5000/city/leaderboard?period=${timeframe}`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCityLeaderboard(data.leaderboard || []);
+        }
+      } catch (err) {
+        console.error("Erreur récupération classement ville :", err);
+      } finally {
+        setIsLoadingCity(false);
+      }
+    };
+
+    fetchCityLeaderboard();
+  }, [timeframe]); // CORRECTION : On a aussi retiré 'leaderboardTab' de ce tableau à la fin
+
   // 2. SYNCHRONISATION INTELLIGENTE DES BADGES
   useEffect(() => {
+    /**
+     * Fonction asynchrone chargée d'évaluer les conditions d'obtention des badges
+     * et de synchroniser les nouveaux badges permanents débloqués avec la base de données.
+     */
     const syncBadges = async () => {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
       try {
+        // Étape 1 : Récupération de la liste actuelle des badges permanents possédés par l'utilisateur.
         const rep = await fetch(`http://192.168.1.143:5000/badges/owned`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -96,10 +178,13 @@ const CommunityView = ({ user }) => {
           dbBadges = data.owned_badges.map(b => b.label); 
         }
 
-        const badgesMerites = calculateBadges(myTotalKg, myRank, myFriendsCount);
+        // Étape 2 : Appel du moteur de règles local (côté client) en lui injectant les états actuels (incluant myStreak).
+        const badgesMerites = calculateBadges(myTotalKg, myRank, myFriendsCount, myCityRank, myHouseholdSize, mySensorCount, myLastThrowDate, myStreak);
         let activeBadgeIds = [...dbBadges]; 
         
+        // Étape 3 : Itération sur le résultat de l'évaluation pour déclencher la persistance des nouveaux acquis.
         for (const badge of badgesMerites) {
+          // Si un badge permanent a ses conditions validées côté client MAIS n'est pas encore enregistré en base de données.
           if (badge.isPermanent && badge.unlocked && !dbBadges.includes(badge.id)) {
             const unlockRep = await fetch(`http://192.168.1.143:5000/badges/unlock`, {
               method: 'POST',
@@ -111,11 +196,13 @@ const CommunityView = ({ user }) => {
               toast.success(`🏆 Nouveau trophée permanent : ${badge.name} !`);
             }
           } 
+          // Les badges non-permanents (volatils) sont simplement ajoutés à la liste active pour l'affichage.
           else if (!badge.isPermanent && badge.unlocked) {
             activeBadgeIds.push(badge.id);
           }
         }
         
+        // Mise à jour de l'état local avec la nouvelle liste des badges débloqués.
         setOwnedBadges(activeBadgeIds);
 
       } catch (err) {
@@ -123,21 +210,30 @@ const CommunityView = ({ user }) => {
       }
     };
 
+    // La synchronisation n'est déclenchée que lorsque les données de base (le classement) sont disponibles.
     if (leaderboard.length > 0) {
       syncBadges();
     }
-  }, [leaderboard, myTotalKg, myRank, myFriendsCount]);
+  }, [leaderboard, myTotalKg, myRank, myFriendsCount, myCityRank, myHouseholdSize, mySensorCount, myLastThrowDate, myStreak]);
 
+  /**
+   * Fonction gérant la copie du code ami dans le presse-papiers du navigateur via l'API Navigator.
+   */
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
     navigator.clipboard.writeText(code);
     toast.info(`Code ami ${code} copié dans le presse-papier !`);
   };
 
+  /**
+   * Gère la soumission du formulaire d'envoi de demande d'ami.
+   */
   const handleSendRequest = async (e) => {
     e.preventDefault();
     if (!searchCode) return;
     const formattedCode = searchCode.toUpperCase();
+    
+    // Validation côté client pour prévenir l'auto-ajout
     if (formattedCode === user?.friend_code) {
       toast.warning("Vous ne pouvez pas vous ajouter vous-même !");
       setSearchCode('');
@@ -163,6 +259,11 @@ const CommunityView = ({ user }) => {
     }
   };
 
+  /**
+   * Gère l'acceptation ou le refus d'une demande d'ami entrante.
+   * @param {string} friendCode - Le code ami concerné.
+   * @param {string} action - 'accepter' ou 'refuser'.
+   */
   const handleManageRequest = async (friendCode, action) => {
     try {
       const token = localStorage.getItem('octo_token');
@@ -172,9 +273,11 @@ const CommunityView = ({ user }) => {
         body: JSON.stringify({ friend_code: friendCode, action: action })
       });
       if (response.ok) {
+        // Mise à jour optimiste de l'interface en supprimant la demande traitée
         setPendingRequests(pendingRequests.filter(req => req.friend_code !== friendCode));
         if (action === 'accepter') {
             toast.success("Nouvel ami ajouté à votre réseau !");
+            // Rechargement complet de la page pour rafraîchir le graphe social
             window.location.reload();
         } else {
             toast.info("Demande refusée.");
@@ -188,6 +291,10 @@ const CommunityView = ({ user }) => {
     }
   };
 
+  /**
+   * Supprime un utilisateur de la liste d'amis courante.
+   * @param {string} friendCode - Le code ami à supprimer.
+   */
   const handleDeleteFriend = async (friendCode) => {
     if (!window.confirm("Voulez-vous vraiment supprimer cet ami de votre réseau ?")) return;
     try {
@@ -198,12 +305,17 @@ const CommunityView = ({ user }) => {
         body: JSON.stringify({ friend_code: friendCode })
       });
       if (response.ok) {
+        // Mise à jour de l'état local pour refléter la suppression immédiatement dans le DOM virtuel
         setLeaderboard(leaderboard.filter(person => person.friend_code !== friendCode));
         toast.success("Ami retiré avec succès.");
       }
     } catch (err) {}
   };
 
+  /**
+   * Modère un utilisateur en le plaçant dans la liste des comptes bloqués.
+   * @param {string} friendCode - Le code ami à bloquer.
+   */
   const handleBlockFriend = async (friendCode) => {
     if (!window.confirm("Bloquer cet utilisateur ? Il disparaîtra de vos listes et ne pourra plus interagir avec vous.")) return;
     try {
@@ -214,6 +326,7 @@ const CommunityView = ({ user }) => {
         body: JSON.stringify({ friend_code: friendCode })
       });
       if (response.ok) {
+        // Retrait immédiat de l'utilisateur des vues (classement et demandes) pour respecter le contrôle d'accès
         setLeaderboard(leaderboard.filter(person => person.friend_code !== friendCode));
         setPendingRequests(pendingRequests.filter(req => req.friend_code !== friendCode));
         toast.success("Utilisateur bloqué avec succès.");
@@ -223,6 +336,9 @@ const CommunityView = ({ user }) => {
     }
   };
 
+  /**
+   * Récupère la liste des utilisateurs bloqués depuis le serveur (chargement à la demande).
+   */
   const fetchBlockedUsers = async () => {
     try {
       const token = localStorage.getItem('octo_token');
@@ -238,6 +354,10 @@ const CommunityView = ({ user }) => {
     } catch (err) {}
   };
 
+  /**
+   * Lève le blocage d'un utilisateur modéré.
+   * @param {string} friendCode - Le code ami de l'utilisateur à débloquer.
+   */
   const handleUnblock = async (friendCode) => {
     if (!window.confirm("Voulez-vous débloquer cet utilisateur ?")) return;
     try {
@@ -256,12 +376,15 @@ const CommunityView = ({ user }) => {
 
   return (
     <div style={styles.container}>
+      {/* En-tête de la page */}
       <div style={styles.header}>
         <h1 style={styles.title}>Mes Amis 🤝</h1>
         <p style={styles.subtitle}>Comparez vos performances écologiques avec votre entourage.</p>
       </div>
 
+      {/* Menu de navigation principal par onglets (Tabs) */}
       <div style={styles.tabMenu}>
+        {/* Les boutons modifient l'état 'activeTab' pour déclencher le rendu conditionnel approprié */}
         <button style={activeTab === 'leaderboard' ? styles.tabActive : styles.tab} onClick={() => {setActiveTab('leaderboard'); setIsViewingBlocked(false);}}>
           <i className="fa-solid fa-trophy"></i> Podium
         </button>
@@ -276,47 +399,121 @@ const CommunityView = ({ user }) => {
         </button>
         <button style={activeTab === 'requests' ? styles.tabActive : styles.tab} onClick={() => {setActiveTab('requests'); setIsViewingBlocked(false);}}>
           <i className="fa-solid fa-bell"></i> Demandes 
+          {/* Badge de notification affiché conditionnellement si des demandes sont en attente */}
           {pendingRequests.length > 0 && <span style={styles.badge}>{pendingRequests.length}</span>}
         </button>
       </div>
 
+      {/* Conteneur principal du contenu, modifié par le rendu conditionnel selon l'onglet actif */}
       <div style={styles.contentCard}>
         
         {/* ONGLET 1 : CLASSEMENT GAMIFIÉ */}
         {activeTab === 'leaderboard' && (
           <div>
-            <h2 style={styles.sectionTitle}>Podium de {getNomDuMois()}</h2>
-            
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
-              Celui qui a la barre la plus courte est le plus écologique ! 🌱
-            </p>
+            <div style={styles.leaderboardHeaderWrapper}>
+              <h2 style={{...styles.sectionTitle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0}}>
+                {leaderboardTab === 'friends' ? `Podium de ${getNomDuMois()}` : 'Classement Local'}
+              </h2>
+              {/* Menu secondaire (Sub-Tabs) pour basculer entre le classement privé et public */}
+              <div style={styles.subTabButtons}>
+                <button style={leaderboardTab === 'friends' ? styles.subTabActive : styles.subTab} onClick={() => setLeaderboardTab('friends')}>
+                  Mes Amis
+                </button>
+                <button style={leaderboardTab === 'city' ? styles.subTabActive : styles.subTab} onClick={() => setLeaderboardTab('city')}>
+                  Ma Ville (Public)
+                </button>
+              </div>
+            </div>
 
-            {leaderboard.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Chargement des données...</p>
-            ) : (
-              leaderboard.map((person, index) => {
-                const percent = (person.totalKg / safeMaxWeight) * 100;
-                let barColor = '#2ecc71'; 
-                if (index === leaderboard.length - 1 && leaderboard.length > 1 && person.totalKg > 0) barColor = '#e74c3c'; 
-                else if (index > 0 && person.totalKg > 0) barColor = '#f39c12'; 
+            {/* SOUS-ONGLET : MES AMIS (Réseau privé) */}
+            {leaderboardTab === 'friends' && (
+              <>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
+                  Celui qui a la barre la plus courte est le plus écologique ! 🌱
+                </p>
 
-                return (
-                  <div key={person.id_user} style={{...styles.listItem, flexDirection: 'column', alignItems: 'stretch', backgroundColor: person.isMe ? 'var(--bg-main)' : 'transparent', borderLeft: person.isMe ? '4px solid var(--primary)' : '4px solid transparent'}}>
-                    <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: '10px' }}>
-                      <div style={styles.rankCircle}>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                {/* Gestion de l'état de chargement ou d'absence de données */}
+                {leaderboard.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Chargement des données...</p>
+                ) : (
+                  leaderboard.map((person, index) => {
+                    // Calcul du ratio pour l'affichage de la barre de progression (limité à 100%)
+                    const percent = (person.totalKg / safeMaxWeight) * 100;
+                    
+                    // Logique visuelle de gamification : les couleurs évoluent selon le rang du joueur.
+                    let barColor = '#2ecc71'; 
+                    // Le dernier du classement (le moins écologique) hérite d'une couleur d'alerte.
+                    if (index === leaderboard.length - 1 && leaderboard.length > 1 && person.totalKg > 0) barColor = '#e74c3c'; 
+                    else if (index > 0 && person.totalKg > 0) barColor = '#f39c12'; 
+
+                    return (
+                      // Application d'un style distinctif (isMe) pour mettre en évidence la ligne de l'utilisateur.
+                      <div key={person.id_user} style={{...styles.listItem, flexDirection: 'column', alignItems: 'stretch', backgroundColor: person.isMe ? 'var(--bg-main)' : 'transparent', borderLeft: person.isMe ? '4px solid var(--primary)' : '4px solid transparent'}}>
+                        <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: '10px' }}>
+                          <div style={styles.rankCircle}>
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                          </div>
+                          <div style={{ flex: 1, marginLeft: '15px' }}>
+                            <strong>{person.first_name} {person.last_name} {person.isMe && '(Vous)'}</strong>
+                          </div>
+                          <div style={{...styles.scoreBadge, backgroundColor: barColor}}>{person.totalKg} kg</div>
+                        </div>
+                        {/* Jauge visuelle de comparaison (plus elle est longue, moins c'est bien) */}
+                        <div style={styles.barTrack}>
+                          <div style={{...styles.barFill, width: `${percent}%`, backgroundColor: barColor}}></div>
+                        </div>
                       </div>
-                      <div style={{ flex: 1, marginLeft: '15px' }}>
-                        <strong>{person.first_name} {person.last_name} {person.isMe && '(Vous)'}</strong>
-                      </div>
-                      <div style={{...styles.scoreBadge, backgroundColor: barColor}}>{person.totalKg} kg</div>
-                    </div>
-                    <div style={styles.barTrack}>
-                      <div style={{...styles.barFill, width: `${percent}%`, backgroundColor: barColor}}></div>
-                    </div>
+                    );
+                  })
+                )}
+              </>
+            )}
+
+            {/* SOUS-ONGLET : VILLE (Classement communautaire public) */}
+            {leaderboardTab === 'city' && (
+              <div style={styles.cityLeaderboardList}>
+                
+                {/* Filtres Temporels permettant de modifier la requête envoyée au serveur */}
+                <div style={styles.timeframeFilterContainer}>
+                  <button style={timeframe === 'day' ? styles.timeBtnActive : styles.timeBtn} onClick={() => setTimeframe('day')}>
+                    Aujourd'hui
+                  </button>
+                  <button style={timeframe === 'month' ? styles.timeBtnActive : styles.timeBtn} onClick={() => setTimeframe('month')}>
+                    Ce Mois-ci
+                  </button>
+                </div>
+
+                <p style={styles.cityInfoText}>
+                  <i className="fa-solid fa-circle-info"></i> Seuls les foyers ayant accepté le partage public apparaissent ici.
+                </p>
+                
+                {/* Gestion des états asynchrones pour l'expérience utilisateur (spinner de chargement ou messages vides) */}
+                {isLoadingCity ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                    <i className="fa-solid fa-spinner fa-spin"></i> Chargement du classement...
+                  </p>
+                ) : cityLeaderboard.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px', background: 'var(--bg-main)', borderRadius: '12px' }}>
+                    <h3 style={{ color: 'var(--text-main)', margin: '0 0 10px 0' }}>Aucune donnée 📭</h3>
+                    <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+                      Personne n'a encore jeté de déchets {timeframe === 'day' ? "aujourd'hui" : "ce mois-ci"} avec le partage activé.
+                    </p>
                   </div>
-                );
-              })
+                ) : (
+                  cityLeaderboard.map((user, index) => (
+                    // La ligne de l'utilisateur est stylisée différemment via styles.cityHighlightMe
+                    <div key={user.id_user} style={{...styles.cityLeaderboardItem, ...(user.isMe ? styles.cityHighlightMe : {})}}>
+                      <div style={styles.cityItemRank}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                      </div>
+                      <div style={styles.cityItemName}>
+                        {user.name} {user.isMe && <span style={{fontSize: '0.8rem', color: 'var(--primary)'}}>(Vous)</span>}
+                      </div>
+                      <div style={styles.cityItemScore}>{user.score} kg sauvés</div>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         )}
@@ -328,13 +525,26 @@ const CommunityView = ({ user }) => {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
               Retrouvez ici l'ensemble des récompenses que vous avez débloquées grâce à vos actions éco-citoyennes.
             </p>
-            <BadgeShowcase ownedBadges={ownedBadges} />
+            {/* INJECTION DE TOUTES LES DONNÉES DANS LA VITRINE */}
+            {/* Le composant enfant reçoit l'ensemble du contexte métier pour affichage (Principe de Dumb Component). */}
+            <BadgeShowcase 
+                ownedBadges={ownedBadges} 
+                totalKg={myTotalKg} 
+                rank={myRank} 
+                friendsCount={myFriendsCount} 
+                cityRank={myCityRank} 
+                householdSize={myHouseholdSize}
+                sensorCount={mySensorCount}
+                lastThrowDate={myLastThrowDate}
+                streakDays={myStreak}
+            />
           </div>
         )}
 
         {/* ONGLET : LISTE DES AMIS / BLOQUÉS */}
         {activeTab === 'friends' && (
           <div>
+            {/* Basculement entre la liste des amis actifs et la vue d'administration (utilisateurs bloqués) */}
             {!isViewingBlocked ? (
               <>
                 <h2 style={styles.sectionTitle}>Ma liste d'amis</h2>
@@ -348,6 +558,7 @@ const CommunityView = ({ user }) => {
                         <strong>{person.first_name} {person.last_name}</strong> 
                         <div style={{color: 'var(--text-muted)', fontSize: '0.85rem'}}>Code : {person.friend_code}</div>
                       </div>
+                      {/* Contrôles de modération par ligne */}
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button onClick={() => handleBlockFriend(person.friend_code)} style={styles.blockBtn} title="Bloquer cet utilisateur">
                           <i className="fa-solid fa-shield-halved"></i>
@@ -360,6 +571,7 @@ const CommunityView = ({ user }) => {
                   ))
                 )}
                 
+                {/* Lien permettant d'accéder au registre des utilisateurs bannis */}
                 <button onClick={fetchBlockedUsers} style={styles.discreetLink}>
                   <i className="fa-solid fa-lock"></i> Gérer les utilisateurs bloqués
                 </button>
@@ -391,10 +603,11 @@ const CommunityView = ({ user }) => {
           </div>
         )}
 
-        {/* ONGLET : AJOUTER VIA CODE AMI */}
+        {/* ONGLET : AJOUTER VIA CODE AMI (Gestion du consentement) */}
         {activeTab === 'add' && (
           <div>
             <h2 style={styles.sectionTitle}>Réseau Éco-Citoyen</h2>
+            {/* Zone d'affichage du code personnel (Privacy Control) */}
             <div style={styles.myCodeBox}>
               <p style={styles.myCodeLabel}>Votre Code Ami à partager :</p>
               <div style={styles.codeDisplayWrapper}>
@@ -405,7 +618,9 @@ const CommunityView = ({ user }) => {
               </div>
             </div>
             <p style={{ marginTop: '25px', marginBottom: '10px', color: 'var(--text-main)', fontWeight: 'bold' }}>Ajouter un foyer :</p>
+            {/* Formulaire de demande d'ajout d'une relation au graphe */}
             <form onSubmit={handleSendRequest} style={styles.form}>
+              {/* Entrée formatée en majuscule via l'événement onChange */}
               <input type="text" placeholder="Ex: ABC-1234" value={searchCode} onChange={(e) => setSearchCode(e.target.value.toUpperCase())} style={styles.input} maxLength={10} required />
               <button type="submit" style={styles.submitBtn}><i className="fa-solid fa-paper-plane"></i> Envoyer</button>
             </form>
@@ -424,6 +639,7 @@ const CommunityView = ({ user }) => {
                   <div style={{ flex: 1 }}>
                     <strong>{req.first_name} {req.last_name}</strong> <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>({req.friend_code})</span>
                   </div>
+                  {/* Panneau de contrôle des autorisations d'accès entrantes */}
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button onClick={() => handleManageRequest(req.friend_code, 'accepter')} style={styles.acceptBtn} title="Accepter">
                       <i className="fa-solid fa-check"></i>
@@ -476,7 +692,24 @@ const styles = {
   barFill: { height: '100%', borderRadius: '4px', transition: 'width 1s ease-in-out, background-color 0.5s' },
   discreetLink: { background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem', marginTop: '25px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' },
   backBtn: { background: 'var(--bg-main)', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '15px', display: 'inline-flex', alignItems: 'center', gap: '8px' },
-  unblockBtn: { background: '#2ecc71', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }
+  unblockBtn: { background: '#2ecc71', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' },
+
+  leaderboardHeaderWrapper: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', flexWrap: 'wrap', gap: '15px' },
+  subTabButtons: { display: 'flex', gap: '10px', background: 'var(--bg-main)', padding: '5px', borderRadius: '8px' },
+  subTab: { padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'transparent', cursor: 'pointer', fontWeight: 'bold', color: 'var(--text-muted)', transition: 'all 0.2s ease' },
+  subTabActive: { padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
+  
+  timeframeFilterContainer: { display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '15px' },
+  timeBtn: { padding: '6px 15px', borderRadius: '20px', border: '1px solid var(--border-color)', background: 'var(--bg-main)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold', transition: '0.2s' },
+  timeBtnActive: { padding: '6px 15px', borderRadius: '20px', border: '1px solid var(--primary)', background: 'rgba(46, 204, 113, 0.1)', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' },
+
+  cityInfoText: { fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px', fontStyle: 'italic', textAlign: 'center' },
+  cityLeaderboardList: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  cityLeaderboardItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '12px', transition: 'transform 0.2s' },
+  cityHighlightMe: { backgroundColor: 'rgba(46, 204, 113, 0.1)', borderColor: 'var(--primary)', fontWeight: 'bold' },
+  cityItemRank: { width: '40px', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-muted)' },
+  cityItemName: { flex: 1, fontSize: '1rem', color: 'var(--text-main)', fontWeight: 'bold' },
+  cityItemScore: { fontWeight: 'bold', color: 'var(--primary)' }
 };
 
 export default CommunityView;
