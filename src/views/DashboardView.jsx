@@ -1,7 +1,7 @@
 // src/views/DashboardView.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client'; // <-- C'EST CETTE LIGNE QUI MANQUAIT !
+import io from 'socket.io-client';
 import WeightCard from './widgets/WeightCard';
 import HistoryChart from './widgets/HistoryChart';
 import GoalChart from './widgets/GoalChart'; 
@@ -79,11 +79,10 @@ const DashboardView = ({ user }) => {
     fetchInitialData();
   }, []);
 
-  // 2. ÉCOUTE TEMPS RÉEL VIA WEBSOCKET (Adieu le Polling !)
+  // 2. ÉCOUTE TEMPS RÉEL VIA WEBSOCKET
   useEffect(() => {
     if (!selectedDeveui) return;
 
-    // La fonction qui va chercher les données à jour
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem('octo_token');
@@ -145,23 +144,18 @@ const DashboardView = ({ user }) => {
       }
     };
 
-    // 1. On charge les données une première fois à l'affichage
     setIsLoading(true);
     fetchDashboardData();
 
-    // 2. On ouvre la connexion WebSocket avec le serveur d'Evan
     const socket = io('http://192.168.1.143:5000');
 
-    // 3. On écoute l'événement 'new_sensor_data'
     socket.on('new_sensor_data', (data) => {
-      // Si la donnée reçue concerne bien la poubelle que je suis en train de regarder
       if (data.deveui === selectedDeveui) {
         console.log("🔔 Ding Dong ! Nouvelle pesée détectée sur la poubelle en temps réel !");
-        fetchDashboardData(); // On rappelle la fonction pour mettre à jour le graphique
+        fetchDashboardData();
       }
     });
 
-    // 4. On nettoie la connexion proprement quand on quitte la page
     return () => {
       socket.disconnect();
     };
@@ -253,7 +247,7 @@ const DashboardView = ({ user }) => {
                 />
                 
                 <WeightCard title="DERNIÈRE MASSE" weight={latestMass} date={latestDate} />
-                <WeightCard title="MASSE TOTALE" weight={totalMass} date="Depuis 24h" />
+                {/* CORRECTION : Le widget doublon MASSE TOTALE a été supprimé d'ici */}
                 <GoalChart currentMass={totalMass} maxCapacity={MAX_CAPACITY} />
               </>
             )}
@@ -285,7 +279,8 @@ const styles = {
     emptyStateCard: { background: 'var(--bg-card)', border: '1px dashed var(--border-color)', borderRadius: '16px', padding: '50px 20px', textAlign: 'center', marginTop: '20px' },
     primaryBtn: { background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 25px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
 
-    topGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '20px' },
+    // CORRECTION : Passage de minmax(250px) à minmax(200px) pour forcer l'alignement strict sur une ligne
+    topGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' },
     bottomGrid: { height: '350px' },
     
     rankCard: { background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '10px', border: '1px solid var(--border-color)' },
