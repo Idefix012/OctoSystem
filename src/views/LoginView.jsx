@@ -2,10 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 
+/**
+ * Composant LoginView
+ * Gère l'authentification des utilisateurs (Connexion, Inscription, Récupération de mot de passe).
+ * Agit comme un sas de sécurité avant l'accès au tableau de bord.
+ */
 const LoginView = ({ onLoginSuccess }) => {
+  // ÉTATS DE NAVIGATION INTERNE
+  // Détermine la vue active : 'login' (connexion), 'register' (inscription), ou 'forgot' (oubli de mot de passe)
   const [viewMode, setViewMode] = useState('login'); 
+  // Gère les étapes de la récupération de mot de passe (1: demande email, 2: saisie du code et nouveau mot de passe)
   const [forgotStep, setForgotStep] = useState(1); 
 
+  // ÉTATS DES CHAMPS DE FORMULAIRE
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -13,37 +22,50 @@ const LoginView = ({ onLoginSuccess }) => {
   const [firstName, setFirstName] = useState('');
   const [resetCode, setResetCode] = useState('');
 
+  // ÉTATS POUR LA RECHERCHE DE COMMUNE (Auto-complétion)
   const [searchCity, setSearchCity] = useState(''); 
   const [cityResults, setCityResults] = useState([]); 
   const [isSearchingCity, setIsSearchingCity] = useState(false); 
   const [showDropdown, setShowDropdown] = useState(false); 
   
+  // ÉTATS DE L'INTERFACE UTILISATEUR (UX)
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false); 
 
-  // Compte à rebours anti-spam (60 secondes)
+  // ÉTAT DE SÉCURITÉ : Compte à rebours anti-spam (Cooldown) en secondes
   const [cooldown, setCooldown] = useState(0);
 
+  // 1. CYCLE DE VIE : GESTION DU COOLDOWN (Anti-spam)
   useEffect(() => {
     let timer;
     if (cooldown > 0) {
+      // Décrémente le compteur chaque seconde
       timer = setInterval(() => {
         setCooldown((prev) => prev - 1);
       }, 1000);
     }
+    // Fonction de nettoyage (cleanup) pour détruire l'intervalle si le composant est démonté
+    // ou avant la prochaine exécution du Hook
     return () => clearInterval(timer);
   }, [cooldown]);
 
+  // 2. CYCLE DE VIE : RECHERCHE DE COMMUNE AVEC "DEBOUNCE" (Anti-rebond)
   useEffect(() => {
+    // Si la saisie est trop courte ou vide, on réinitialise les résultats
     if (!searchCity || searchCity.trim().length < 2) {
       setCityResults([]);
       setShowDropdown(false);
       return;
     }
+    
+    // Implémentation d'un délai (debounce) de 300ms.
+    // L'appel API n'est déclenché que si l'utilisateur cesse de taper pendant 300ms,
+    // ce qui protège le serveur contre une surcharge de requêtes HTTP.
     const delayDebounceFn = setTimeout(async () => {
       setIsSearchingCity(true);
       try {
+        // Encodage de la saisie (encodeURIComponent) pour éviter les failles et erreurs d'URL
         const response = await fetch(`http://192.168.1.143:5000/search_city?q=${encodeURIComponent(searchCity)}`);
         if (response.ok) {
           const data = await response.json();
@@ -56,15 +78,23 @@ const LoginView = ({ onLoginSuccess }) => {
         setIsSearchingCity(false);
       }
     }, 300);
+    
+    // Nettoyage du timeout si l'utilisateur tape une nouvelle lettre avant la fin des 300ms
     return () => clearTimeout(delayDebounceFn);
   }, [searchCity]);
 
+  /**
+   * Valide la sélection d'une commune depuis la liste déroulante
+   */
   const handleSelectCity = (city) => {
     setSearchCity(city.city_name); 
     setShowDropdown(false); 
     setCityResults([]);
   };
 
+  /**
+   * Bascule entre les modes (Connexion, Inscription, Oubli) et réinitialise tous les états
+   */
   const switchMode = (mode) => {
     setViewMode(mode);
     setForgotStep(1); 
@@ -81,18 +111,23 @@ const LoginView = ({ onLoginSuccess }) => {
     setCooldown(0); 
   };
 
+  /**
+   * Gère la soumission des formulaires d'Inscription et de Connexion
+   */
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Empêche le rechargement natif de la page
     
+    // Validation front-end : vérification de la concordance des mots de passe en mode inscription
     if (viewMode === 'register' && password !== confirmPassword) {
       toast.error("Les mots de passe ne correspondent pas !");
-      return;
+      return; // Interruption immédiate (fail-fast)
     }
 
     setIsLoading(true);
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase(); // Normalisation de la donnée
 
     try {
+      // BRANCHE : CONNEXION
       if (viewMode === 'login') {
         const response = await fetch('http://192.168.1.143:5000/login', {
           method: 'POST',
@@ -103,15 +138,19 @@ const LoginView = ({ onLoginSuccess }) => {
         if (response.ok) {
           const rawData = await response.json();
           const userData = rawData.data; 
+          // Stockage des informations de session et du jeton JWT dans le stockage local du navigateur
           localStorage.setItem('octo_user', JSON.stringify(userData));
           localStorage.setItem('octo_token', rawData.token);
           toast.success(`Ravi de vous revoir, ${userData.first_name} !`);
+          // Remontée d'information vers le composant parent pour changer l'état d'authentification global
           onLoginSuccess(userData); 
         } else {
           toast.error("Identifiants incorrects."); 
         }
 
+      // BRANCHE : INSCRIPTION
       } else if (viewMode === 'register') {
+        // Validation front-end de la présence de la commune
         if (!searchCity) {
           toast.warning("Veuillez sélectionner une commune."); 
           setIsLoading(false);
@@ -132,6 +171,7 @@ const LoginView = ({ onLoginSuccess }) => {
 
         if (response.ok) {
           toast.success("Compte créé avec succès ! Vous pouvez vous connecter.");
+          // Bascule automatique vers l'écran de connexion après un léger délai
           setTimeout(() => switchMode('login'), 2000);
         } else {
           const errorData = await response.json();
@@ -142,13 +182,17 @@ const LoginView = ({ onLoginSuccess }) => {
       console.error(err);
       toast.error("Erreur réseau : Impossible de joindre l'API.");
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Réactivation des boutons
     }
   };
 
+  /**
+   * Gère la soumission du processus de récupération de mot de passe (en 2 étapes)
+   */
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
     
+    // Sécurité front-end : empêche l'envoi de requêtes si le cooldown est actif
     if (forgotStep === 1 && cooldown > 0) {
       toast.warning(`Veuillez patienter ${cooldown} secondes avant de renvoyer un email.`);
       return;
@@ -158,6 +202,7 @@ const LoginView = ({ onLoginSuccess }) => {
     const cleanEmail = email.trim().toLowerCase();
 
     try {
+      // ÉTAPE 1 : Demande d'envoi du code de réinitialisation
       if (forgotStep === 1) {
         const response = await fetch('http://192.168.1.143:5000/forgot-password', {
           method: 'POST',
@@ -165,13 +210,16 @@ const LoginView = ({ onLoginSuccess }) => {
           body: JSON.stringify({ email: cleanEmail })
         });
         
+        // On affiche un succès même si l'email n'existe pas (protection contre l'énumération de comptes)
         if (response.ok) {
           toast.success("Si le compte existe, un code a été envoyé (valide 15 min) !");
-          setForgotStep(2); 
-          setCooldown(60); 
+          setForgotStep(2); // Passage à l'étape suivante
+          setCooldown(60); // Activation du minuteur anti-spam (60s)
         } else {
           toast.error("Une erreur est survenue.");
         }
+        
+      // ÉTAPE 2 : Validation du code et enregistrement du nouveau mot de passe
       } else if (forgotStep === 2) {
         if (password !== confirmPassword) {
           toast.error("Les nouveaux mots de passe ne correspondent pas !");
@@ -200,6 +248,7 @@ const LoginView = ({ onLoginSuccess }) => {
     }
   };
 
+  // RENDU CONDITIONNEL : VUE "MOT DE PASSE OUBLIÉ"
   if (viewMode === 'forgot') {
     return (
       <div className="login-container">
@@ -211,6 +260,7 @@ const LoginView = ({ onLoginSuccess }) => {
           
           <form onSubmit={handleForgotSubmit} className="login-form">
             {forgotStep === 1 ? (
+              // Formulaire Étape 1 : Saisie de l'email
               <>
                 <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                   Entrez votre adresse email. Nous vous enverrons un code de sécurité (valide 15 minutes).
@@ -221,6 +271,7 @@ const LoginView = ({ onLoginSuccess }) => {
                 </div>
               </>
             ) : (
+              // Formulaire Étape 2 : Saisie du code et des nouveaux mots de passe
               <>
                 <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                   Entrez le code reçu par email ainsi que votre nouveau mot de passe.
@@ -246,6 +297,7 @@ const LoginView = ({ onLoginSuccess }) => {
               </>
             )}
 
+            {/* Bouton de soumission adaptatif (gestion dynamique du texte et de l'état désactivé) */}
             <button 
               type="submit" 
               className="login-btn" 
@@ -262,6 +314,7 @@ const LoginView = ({ onLoginSuccess }) => {
             </button>
           </form>
 
+          {/* Option de renvoi du code affichée uniquement à l'étape 2 */}
           {forgotStep === 2 && (
             <div style={{ marginTop: '15px', textAlign: 'center' }}>
                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -270,7 +323,7 @@ const LoginView = ({ onLoginSuccess }) => {
                <button 
                  type="button" 
                  onClick={() => {
-                   if (cooldown === 0) setForgotStep(1); 
+                   if (cooldown === 0) setForgotStep(1); // Retourne à l'étape 1 si le cooldown est terminé
                  }} 
                  style={{ 
                    background: 'none', border: 'none', 
@@ -294,15 +347,18 @@ const LoginView = ({ onLoginSuccess }) => {
     );
   }
 
+  // RENDU CONDITIONNEL : VUE "CONNEXION" OU "INSCRIPTION"
   return (
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
           <h2>Octo'System</h2>
+          {/* Titre dynamique selon le mode actif */}
           <p>{viewMode === 'login' ? "Connexion au panneau de contrôle" : "Création d'un nouveau compte"}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
+          {/* Champs exclusifs au mode Inscription */}
           {viewMode === 'register' && (
             <>
               <div className="input-group">
@@ -314,11 +370,14 @@ const LoginView = ({ onLoginSuccess }) => {
                 <input type="text" id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Ex: Ollivier" disabled={isLoading} required />
               </div>
               
+              {/* Champ Commune avec système d'auto-complétion (Dropdown) */}
               <div className="input-group" style={{ position: 'relative' }}>
                 <label htmlFor="searchCity">Commune de résidence</label>
                 <input type="text" id="searchCity" value={searchCity} onChange={(e) => setSearchCity(e.target.value)} placeholder="Tapez le nom de votre ville..." disabled={isLoading} autoComplete="off" required />
                 <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '5px', display: 'block', fontStyle: 'italic' }}>Information: Utilisez des tirets pour les noms composés.</small>
+                {/* Spinner de chargement affiché pendant la requête HTTP de recherche */}
                 {isSearchingCity && <i className="fa-solid fa-spinner fa-spin" style={{ position: 'absolute', right: '15px', top: '40px', color: 'var(--primary)' }}></i>}
+                {/* Rendu conditionnel de la liste de résultats */}
                 {showDropdown && cityResults.length > 0 && (
                   <ul style={styles.dropdown}>
                     {cityResults.map((city, index) => (
@@ -330,6 +389,7 @@ const LoginView = ({ onLoginSuccess }) => {
             </>
           )}
 
+          {/* Champs communs (Email et Mot de passe) */}
           <div className="input-group">
             <label htmlFor="email">Adresse Email</label>
             <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Ex: jean.dupont@email.com" disabled={isLoading} required />
@@ -338,18 +398,21 @@ const LoginView = ({ onLoginSuccess }) => {
           <div className="input-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label htmlFor="password">Mot de passe</label>
+              {/* Lien "Mot de passe oublié" affiché uniquement en mode connexion */}
               {viewMode === 'login' && (
                 <span onClick={() => switchMode('forgot')} style={{ fontSize: '0.85rem', color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}>
                   Mot de passe oublié ?
                 </span>
               )}
             </div>
+            {/* Champ de mot de passe avec bascule de visibilité (type="text" ou type="password") */}
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input type={showPassword ? "text" : "password"} id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" disabled={isLoading} required style={{ width: '100%', paddingRight: '40px', boxSizing: 'border-box' }} />
               <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`} onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '15px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}></i>
             </div>
           </div>
 
+          {/* Champ de confirmation de mot de passe exclusif au mode Inscription */}
           {viewMode === 'register' && (
             <div className="input-group">
               <label htmlFor="confirmPassword">Confirmer le mot de passe</label>
@@ -360,6 +423,7 @@ const LoginView = ({ onLoginSuccess }) => {
             </div>
           )}
 
+          {/* Bouton de soumission principal avec feedback visuel (spinner) */}
           <button type="submit" className="login-btn" disabled={isLoading}>
             {isLoading ? (
               <><i className="fa-solid fa-spinner fa-spin"></i> Traitement...</>
@@ -369,6 +433,7 @@ const LoginView = ({ onLoginSuccess }) => {
           </button>
         </form>
 
+        {/* Lien de basculement entre les vues Connexion et Inscription */}
         <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.9rem' }}>
           <span style={{ color: 'var(--text-muted)' }}>
             {viewMode === 'login' ? "Pas encore de compte ?" : "Vous avez déjà un compte ?"}
@@ -382,6 +447,7 @@ const LoginView = ({ onLoginSuccess }) => {
   );
 };
 
+// Dictionnaire contenant les styles CSS-in-JS spécifiques au composant d'auto-complétion
 const styles = {
   dropdown: {
     position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-card)',
