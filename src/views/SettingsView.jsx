@@ -2,46 +2,86 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify'; 
 
-const SettingsView = ({ onLogout, user }) => {
+/**
+ * Composant SettingsView
+ * Vue de configuration (Smart Component) permettant à l'utilisateur de gérer son profil,
+ * sa sécurité (mots de passe), ses capteurs IoT, et ses préférences de confidentialité (RGPD).
+ */
+const SettingsView = ({ onLogout, user, onUpdateUser }) => {
+  // ÉTATS LOCAUX : Formulaire de profil
+  // Utilisation de l'opérateur de chaînage optionnel (?.) et de valeurs de repli (||)
+  // pour éviter des erreurs si l'objet 'user' n'est pas encore totalement chargé.
   const [firstName, setFirstName] = useState(user?.first_name || '');
   const [lastName, setLastName] = useState(user?.last_name || '');
   const [email, setEmail] = useState(user?.email || '');
-  
   const [householdSize, setHouseholdSize] = useState(user?.household_size || 1);
   
+  // ÉTATS LOCAUX : Système d'auto-complétion pour la ville
   const [citySearch, setCitySearch] = useState('');
   const [cityList, setCityList] = useState([]);
 
+  // ÉTATS LOCAUX : Formulaire de modification du mot de passe
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // ÉTATS LOCAUX : UX des champs de mot de passe (visibilité)
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // ÉTAT LOCAL : Enregistrement d'un nouveau matériel IoT
   const [newDeveui, setNewDeveui] = useState('');
 
-  const [darkMode, setDarkMode] = useState(document.body.classList.contains('dark-mode'));
+  // ÉTAT LOCAL : Gestion du thème (Dark Mode)
+  // Utilisation de l'initialisation paresseuse (lazy initialization) avec une fonction fléchée.
+  // Cela garantit que localStorage.getItem n'est exécuté qu'une seule fois au montage initial, optimisant les performances.
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('octo_theme') === 'dark';
+  });
+  
+  // CORRECTION : Initialisation intelligente du consentement RGPD (Opt-in pour le classement public)
+  const [isPubliclyShared, setIsPubliclyShared] = useState(() => {
+    // 1. On vérifie s'il y a une sauvegarde locale forcée pour cet utilisateur précis
+    const saved = localStorage.getItem(`octo_rgpd_${user?.id_user}`);
+    if (saved !== null) return saved === 'true';
+    
+    // 2. Sinon on prend la valeur de la base de données (gère les true/false natifs et les 1/0 de MySQL)
+    return user?.is_public === 1 || user?.is_public === true;
+  });
 
+  /**
+   * Bascule le thème visuel de l'application et persiste le choix dans le navigateur.
+   * Manipule directement l'objet document.body pour appliquer la classe CSS globale.
+   */
   const toggleDarkMode = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
+    
     if (newMode) {
       document.body.classList.add('dark-mode');
+      localStorage.setItem('octo_theme', 'dark'); 
     } else {
       document.body.classList.remove('dark-mode');
+      localStorage.setItem('octo_theme', 'light'); 
     }
   };
 
+  /**
+   * Copie le code ami de l'utilisateur dans le presse-papiers du système d'exploitation.
+   */
   const handleCopyCode = () => {
     const code = user?.friend_code || "XXXX-XXXX";
     navigator.clipboard.writeText(code);
     toast.info(`Code ami ${code} copié !`); 
   };
 
+  /**
+   * Interroge l'API pour récupérer une liste de villes correspondantes à la saisie.
+   */
   const handleSearchCity = async (text) => {
     setCitySearch(text);
+    // Prévention des requêtes inutiles : on attend au moins 2 caractères
     if (text.length < 2) {
       setCityList([]);
       return;
@@ -57,12 +97,19 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
+  /**
+   * Valide la sélection d'une commune dans la liste d'auto-complétion et masque cette dernière.
+   */
   const handleSelectCity = (cityName) => {
     setCitySearch(cityName);
     setCityList([]); 
   };
 
+  /**
+   * Envoie une requête PUT pour mettre à jour les informations du profil utilisateur.
+   */
   const handleSaveProfile = async () => {
+    // Règle métier : un foyer ne peut pas compter moins d'une personne
     if (householdSize < 1) {
       toast.warning("Le foyer doit compter au moins 1 personne.");
       return;
@@ -72,6 +119,7 @@ const SettingsView = ({ onLogout, user }) => {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
+      // Construction dynamique du Payload
       const payload = { 
         first_name: firstName, 
         last_name: lastName, 
@@ -79,6 +127,7 @@ const SettingsView = ({ onLogout, user }) => {
         household_size: parseInt(householdSize, 10)
       };
       
+      // N'ajoute la commune au payload que si le champ n'est pas vide
       if (citySearch.trim() !== '') {
         payload.city_name = citySearch.trim();
       }
@@ -104,9 +153,13 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
+  /**
+   * Envoie une requête PUT pour sécuriser la modification du mot de passe.
+   */
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
     
+    // Validations front-end successives (Fail-fast)
     if (!oldPassword || !newPassword || !confirmPassword) {
       toast.warning("Veuillez remplir tous les champs de mot de passe."); 
       return;
@@ -138,6 +191,7 @@ const SettingsView = ({ onLogout, user }) => {
 
       if (response.ok) {
         toast.success("Mot de passe mis à jour avec succès !"); 
+        // Réinitialisation des états liés à la sécurité après le succès
         setOldPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -154,6 +208,9 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
+  /**
+   * Envoie une requête POST pour associer un nouveau capteur IoT (DevEUI) au compte de l'utilisateur.
+   */
   const handleAddGarbage = async (e) => {
     e.preventDefault();
     if (!newDeveui || newDeveui.trim().length < 5) {
@@ -187,7 +244,12 @@ const SettingsView = ({ onLogout, user }) => {
     }
   };
 
+  /**
+   * Déclenche la procédure de suppression définitive du compte.
+   * Conforme au droit à l'effacement (Article 17 du RGPD).
+   */
   const handleDeleteAccount = async () => {
+    // Protection UI : demande de confirmation explicite avant une action destructive
     if (!window.confirm("ÊTES-VOUS SÛR(E) ?\n\nCette action est totalement irréversible. Toutes vos données personnelles, vos statistiques, vos capteurs et votre réseau d'amis seront supprimés définitivement.")) {
       return;
     }
@@ -205,6 +267,7 @@ const SettingsView = ({ onLogout, user }) => {
 
       if (response.ok) {
         toast.success("Votre compte a été supprimé. À bientôt !");
+        // Délai avant déconnexion pour laisser le temps à la notification (toast) de s'afficher
         setTimeout(() => {
           onLogout();
         }, 1500);
@@ -215,6 +278,47 @@ const SettingsView = ({ onLogout, user }) => {
     } catch (err) {
       console.error("Erreur suppression compte :", err);
       toast.error("Impossible de joindre le serveur.");
+    }
+  };
+
+  /**
+   * CORRECTION : Fonction gérant la mise à jour asynchrone du consentement de partage public.
+   * Maintient la synchronisation entre l'état local, le cache (localStorage) et la base de données.
+   */
+  const handleTogglePublicShare = async () => {
+    const newValue = !isPubliclyShared;
+    setIsPubliclyShared(newValue); // Mise à jour optimiste de l'UI
+
+    try {
+      const token = localStorage.getItem('octo_token');
+      const response = await fetch(`http://192.168.1.143:5000/users/preferences`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ is_public: newValue })
+      });
+
+      if (response.ok) {
+        
+        // LA MAGIE EST LÀ : On prévient App.jsx de la modification instantanément
+        // via la fonction de rappel (callback) passée en props.
+        if (onUpdateUser) {
+          onUpdateUser({ ...user, is_public: newValue });
+        }
+        
+        // Sauvegarde de secours (comme avant) pour garantir l'état au prochain rechargement complet
+        localStorage.setItem(`octo_rgpd_${user?.id_user}`, newValue);
+        
+        toast.success(newValue ? "Données partagées avec la ville !" : "Partage public désactivé.");
+      } else {
+        throw new Error("Erreur serveur");
+      }
+    } catch (err) {
+      // Annulation (Rollback) de la modification visuelle en cas d'échec réseau
+      setIsPubliclyShared(!newValue); 
+      toast.error("Impossible de sauvegarder vos préférences RGPD.");
     }
   };
 
@@ -229,6 +333,7 @@ const SettingsView = ({ onLogout, user }) => {
           <i className="fa-regular fa-id-card"></i> Mon Profil
         </h3>
         
+        {/* Zone de consultation et de copie du code ami unique */}
         <div style={styles.codeBox}>
           <div>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Votre Code Ami</span>
@@ -241,6 +346,7 @@ const SettingsView = ({ onLogout, user }) => {
           </button>
         </div>
 
+        {/* Grille responsive de formulaires */}
         <div style={styles.formGrid}>
           <div style={styles.inputGroup}>
             <label style={styles.label}>Prénom</label>
@@ -269,6 +375,7 @@ const SettingsView = ({ onLogout, user }) => {
             />
           </div>
 
+          {/* Champ d'auto-complétion pour la ville, occupant toute la largeur de la grille (gridColumn: '1 / -1') */}
           <div style={{...styles.inputGroup, position: 'relative', gridColumn: '1 / -1'}}>
             <label style={styles.label}>
               Commune actuelle : <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{user?.city_name || "Non renseignée"}</span>
@@ -280,6 +387,7 @@ const SettingsView = ({ onLogout, user }) => {
               onChange={(e) => handleSearchCity(e.target.value)} 
               style={styles.input} 
             />
+            {/* Rendu conditionnel de la liste des résultats flottante */}
             {cityList.length > 0 && (
               <ul style={styles.autocompleteList}>
                 {cityList.map((c) => (
@@ -309,7 +417,7 @@ const SettingsView = ({ onLogout, user }) => {
             <label style={styles.label}>Ancien mot de passe</label>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input 
-                type={showOldPassword ? "text" : "password"} 
+                type={showOldPassword ? "text" : "password"} // Bascule dynamique du type d'input pour l'UX
                 placeholder="••••••••" 
                 value={oldPassword} 
                 onChange={(e) => setOldPassword(e.target.value)} 
@@ -386,7 +494,7 @@ const SettingsView = ({ onLogout, user }) => {
               type="text" 
               placeholder="Ex: A1B2-C3D4-E5F6" 
               value={newDeveui} 
-              onChange={(e) => setNewDeveui(e.target.value.toUpperCase())} 
+              onChange={(e) => setNewDeveui(e.target.value.toUpperCase())} // Forçage en majuscules pour correspondre à la structure de l'identifiant matériel
               style={{...styles.input, fontFamily: 'monospace', letterSpacing: '1px'}} 
             />
           </div>
@@ -396,9 +504,11 @@ const SettingsView = ({ onLogout, user }) => {
         </form>
       </div>
 
-      {/* SECTION 4 : PRÉFÉRENCES */}
+      {/* SECTION 4 : PRÉFÉRENCES ET CONFIDENTIALITÉ */}
       <div className="settings-card" style={{ marginBottom: '30px' }}>
         <h3 style={{ borderBottom: '2px solid var(--border-color)', paddingBottom: '10px' }}>Préférences d'affichage</h3>
+        
+        {/* Composant de contrôle de type "Switch/Toggle" */}
         <div className="setting-item">
           <div className="setting-info">
             <h4>Thème Sombre (Dark Mode)</h4>
@@ -410,6 +520,24 @@ const SettingsView = ({ onLogout, user }) => {
           </label>
         </div>
 
+        {/* Bloc Confidentialité (RGPD) */}
+        <h3 style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-color)', color: '#3498db' }}>
+          Confidentialité (RGPD)
+        </h3>
+        <div className="setting-item" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px' }}>
+          <div className="setting-info" style={{ flex: '1 1 300px' }}>
+            <h4 style={{ color: '#3498db' }}>Classement de la Ville (Octo'Community)</h4>
+            <p>
+              En activant cette option (Opt-in), vous acceptez que le poids de vos déchets (anonymisé avec la première lettre de votre nom) apparaisse dans le classement public de la ville.
+            </p>
+          </div>
+          <label className="switch">
+            <input type="checkbox" checked={isPubliclyShared} onChange={handleTogglePublicShare} />
+            <span className="slider"></span>
+          </label>
+        </div>
+
+        {/* Action sur la session */}
         <h3 style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-color)', color: '#f39c12' }}>
           Session
         </h3>
@@ -424,7 +552,7 @@ const SettingsView = ({ onLogout, user }) => {
         </div>
       </div>
 
-      {/* SECTION 5 : ZONE DE DANGER (RGPD) */}
+      {/* SECTION 5 : ZONE DE DANGER (RGPD - Droit à l'effacement) */}
       <div className="settings-card" style={{ border: '2px dashed #e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.05)' }}>
         <h3 style={{ color: '#e74c3c', borderBottom: '2px solid rgba(231, 76, 60, 0.2)', paddingBottom: '10px' }}>
           <i className="fa-solid fa-triangle-exclamation"></i> Zone de Danger
@@ -446,6 +574,7 @@ const SettingsView = ({ onLogout, user }) => {
   );
 };
 
+// Dictionnaire des styles CSS en JSS (JavaScript Style Sheets)
 const styles = {
   container: { padding: '20px', maxWidth: '800px', margin: '0 auto', width: '100%', paddingBottom: '50px' },
   title: { fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '5px' },
