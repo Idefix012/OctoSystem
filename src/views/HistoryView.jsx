@@ -1,8 +1,9 @@
 // src/views/HistoryView.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client'; // <-- IMPORT DU WEBSOCKET
-import { toast } from 'react-toastify'; // <-- IMPORT POUR LES NOTIFICATIONS
+import io from 'socket.io-client'; // Import du client WebSocket pour l'actualisation en temps réel
+import { toast } from 'react-toastify'; // Import de la bibliothèque de notifications
+// Importation des modules spécifiques de Chart.js nécessaires pour construire un graphique en ligne
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +17,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
+// Enregistrement des composants Chart.js pour le rendu du Canvas
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -27,15 +29,24 @@ ChartJS.register(
   Filler
 );
 
+/**
+ * Composant HistoryView
+ * Vue dédiée à l'affichage analytique (tableau de données et graphique) de l'historique des pesées.
+ * Intègre une fonctionnalité d'exportation CSV générée côté client (Blob).
+ */
 const HistoryView = () => {
   const navigate = useNavigate();
+  // État local stockant les données d'historique brutes renvoyées par l'API
   const [historyData, setHistoryData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // ÉTATS POUR LA SÉLECTION DE POUBELLE
+  // ÉTATS POUR LA SÉLECTION DE POUBELLE (Gestion dynamique du contexte matériel)
   const [garbages, setGarbages] = useState([]);
   const [selectedDeveui, setSelectedDeveui] = useState('');
 
+  /**
+   * Génère la chaîne de date du jour au format requis par l'API (YYYY-MM-DD).
+   */
   const getTodayString = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -44,8 +55,14 @@ const HistoryView = () => {
     return `${yyyy}-${mm}-${dd}`;
   };
 
+  // État stockant la date sélectionnée dans l'interface de filtrage, initialisé à la date du jour.
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
+  /**
+   * Fonction utilitaire de formatage de l'horodatage ISO vers un format lisible.
+   * @param {string} dateString - Chaîne de date au format ISO 8601.
+   * @returns {Object} Objet contenant la date (JJ/MM/AAAA) et l'heure (HHhMM) séparées.
+   */
   const formatDate = (dateString) => {
     const d = new Date(dateString);
     const jour = d.getDate().toString().padStart(2, '0');
@@ -60,13 +77,14 @@ const HistoryView = () => {
     };
   };
 
-  // 1. CHARGEMENT DE LA LISTE DES POUBELLES
+  // 1. CHARGEMENT DE LA LISTE DES POUBELLES (Initialisation du contexte matériel)
   useEffect(() => {
     const fetchGarbages = async () => {
       try {
         const token = localStorage.getItem('octo_token');
         if (!token) return;
 
+        // Requête HTTP GET pour récupérer les appareils associés à l'utilisateur
         const response = await fetch(`http://192.168.1.143:5000/garbages`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -74,6 +92,7 @@ const HistoryView = () => {
         if (response.ok) {
           const listGarbages = await response.json();
           setGarbages(listGarbages);
+          // Si au moins un capteur existe, on sélectionne le premier pour initialiser l'état 'selectedDeveui'
           if (listGarbages.length > 0) {
             setSelectedDeveui(listGarbages[0].deveui);
           } else {
@@ -88,8 +107,9 @@ const HistoryView = () => {
     fetchGarbages();
   }, []);
 
-  // FONCTION RÉUTILISABLE POUR CHARGER L'HISTORIQUE
+  // FONCTION RÉUTILISABLE POUR CHARGER L'HISTORIQUE SELON LES FILTRES ACTIFS
   const fetchHistoryByDate = async () => {
+    // Clause de garde : on ne lance pas la requête si les paramètres obligatoires sont absents
     if (!selectedDate || !selectedDeveui) {
       setHistoryData([]);
       return;
@@ -101,6 +121,7 @@ const HistoryView = () => {
       const token = localStorage.getItem('octo_token');
       if (!token) return;
 
+      // Requête HTTP GET filtrée par les paramètres d'URL (date et deveui)
       const response = await fetch(`http://192.168.1.143:5000/garbage/data_by_date?date=${selectedDate}&deveui=${selectedDeveui}`, {
         method: 'GET',
         headers: { 
@@ -126,25 +147,27 @@ const HistoryView = () => {
   // 2. CHARGEMENT INITIAL À LA SÉLECTION D'UNE DATE OU D'UNE POUBELLE
   useEffect(() => {
     fetchHistoryByDate();
+    // Le commentaire ci-dessous désactive l'avertissement du linter concernant l'absence de 'fetchHistoryByDate' dans les dépendances
     // eslint-disable-next-line
   }, [selectedDate, selectedDeveui]);
 
-  // 3. ÉCOUTE TEMPS RÉEL VIA WEBSOCKET
+  // 3. ÉCOUTE TEMPS RÉEL VIA WEBSOCKET (Mise à jour conditionnelle)
   useEffect(() => {
     if (!selectedDeveui) return;
 
     const socket = io('http://192.168.1.143:5000');
 
     socket.on('new_sensor_data', (data) => {
-      // On ne rafraîchit la page que si :
-      // 1. La donnée concerne la poubelle sélectionnée
-      // 2. L'utilisateur est en train de regarder l'historique d'aujourd'hui !
+      // Filtrage métier (Optimisation réseau) : On ne déclenche un rafraîchissement (appel API) que si :
+      // 1. La nouvelle donnée provient bien du capteur actuellement sélectionné dans l'interface.
+      // 2. L'utilisateur est en train de consulter l'historique de la date courante (inutile de rafraîchir s'il consulte des archives).
       if (data.deveui === selectedDeveui && selectedDate === getTodayString()) {
         console.log("🔔 WebSocket : Nouvelle pesée détectée ! Mise à jour de l'historique...");
         fetchHistoryByDate();
       }
     });
 
+    // Nettoyage de la connexion lors du démontage pour libérer les ressources
     return () => {
       socket.disconnect();
     };
@@ -152,44 +175,51 @@ const HistoryView = () => {
   }, [selectedDeveui, selectedDate]);
 
 
-  // 4. FONCTION D'EXPORTATION CSV
+  // 4. FONCTION D'EXPORTATION CSV (Génération 100% Client-Side)
   const exportToCSV = () => {
     if (historyData.length === 0) {
       toast.info("Aucune donnée à exporter pour cette date.");
       return;
     }
 
-    // Création des en-têtes du fichier CSV (Séparateur point-virgule pour bien marcher sur Excel français)
+    // Création des en-têtes du fichier. L'utilisation du point-virgule (;) garantit la compatibilité 
+    // native avec la configuration régionale française d'Excel pour séparer les colonnes.
     let csvContent = "Date;Heure;Poids (kg);Statut\n";
 
-    // Ajout des lignes de données (On remet les données dans le bon sens chronologique)
+    // Inversion du tableau pour que l'export Excel affiche les données de manière chronologique (du plus ancien au plus récent)
     const sortedData = [...historyData].reverse();
     sortedData.forEach(item => {
       const dateFormatee = formatDate(item.date);
-      // On remplace le point par une virgule pour que Excel comprenne que c'est un chiffre décimal en français
+      // Remplacement du séparateur décimal (point) par une virgule, indispensable pour l'interprétation correcte des nombres par Excel FR.
       const poidsKg = (parseFloat(item.weight) / 1000).toFixed(2).replace('.', ',');
       
+      // Concaténation de la nouvelle ligne de données au format CSV
       csvContent += `${dateFormatee.jour};${dateFormatee.heure};${poidsKg};Synchronise\n`;
     });
 
-    // Encodage spécial (BOM) pour gérer les accents français sur Excel
+    // Encodage spécial : Ajout du Byte Order Mark (BOM) UTF-8. 
+    // Cela force Excel Windows à lire le fichier en UTF-8, évitant ainsi la corruption des caractères accentués (ex: 'é' transformé en symbole étrange).
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); 
+    // Création d'un objet binaire (Blob) contenant le BOM suivi du contenu textuel.
     const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
     
-    // Création d'un lien invisible pour déclencher le téléchargement
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    // Processus de téléchargement programmé via l'API DOM
+    const url = URL.createObjectURL(blob); // Génère une URL temporaire pointant vers le Blob en mémoire
+    const link = document.createElement("a"); // Crée un élément HTML <a> invisible
     link.setAttribute("href", url);
+    // Spécifie l'attribut 'download' qui force le navigateur à télécharger le fichier au lieu de l'ouvrir
     link.setAttribute("download", `OctoSystem_Historique_${selectedDeveui}_${selectedDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    document.body.appendChild(link); // Injection temporaire dans le DOM
+    link.click(); // Simulation d'un clic utilisateur pour lancer le téléchargement
+    document.body.removeChild(link); // Nettoyage immédiat du DOM
 
     toast.success("Fichier Excel (CSV) exporté avec succès !");
   };
 
+  // Préparation des données pour l'injection dans Chart.js (Inversion pour l'ordre chronologique de l'axe des abscisses)
   const chartDataPrep = [...historyData].reverse(); 
   
+  // Configuration de la structure de données attendue par l'instance Line de Chart.js
   const dataGraphique = {
     labels: chartDataPrep.map(item => formatDate(item.date).heure),
     datasets: [
@@ -204,15 +234,16 @@ const HistoryView = () => {
         pointBorderWidth: 2,
         pointRadius: 5,
         pointHoverRadius: 7,
-        fill: true,
-        tension: 0.4
+        fill: true, // Remplit l'espace sous la courbe
+        tension: 0.4 // Applique un lissage (courbe de Bézier)
       }
     ]
   };
 
+  // Configuration détaillée des options du graphique (axes, info-bulles, réactivité)
   const optionsGraphique = {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: false, // Permet au canvas de remplir entièrement son conteneur parent (chartContainer)
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -257,6 +288,7 @@ const HistoryView = () => {
         </div>
       ) : (
         <>
+          {/* Barre de filtrage et d'actions (Contrôles de l'historique) */}
           <div style={styles.filterBar}>
             {/* SÉLECTEUR DE POUBELLE */}
             <div style={styles.filterGroup}>
@@ -265,7 +297,7 @@ const HistoryView = () => {
               </label>
               <select 
                 value={selectedDeveui} 
-                onChange={(e) => setSelectedDeveui(e.target.value)}
+                onChange={(e) => setSelectedDeveui(e.target.value)} // Modification de l'état local, déclenche la requête API (useEffect)
                 style={styles.selectInput}
               >
                 {garbages.map((g, index) => (
@@ -283,9 +315,9 @@ const HistoryView = () => {
                 type="date" 
                 id="dateFilter"
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => setSelectedDate(e.target.value)} // Modification de l'état local, déclenche la requête API
                 style={styles.dateInput}
-                max={getTodayString()} 
+                max={getTodayString()} // Empêche la sélection d'une date dans le futur via l'attribut natif HTML5
               />
             </div>
 
@@ -294,6 +326,7 @@ const HistoryView = () => {
               <div style={styles.statsCount}>
                 <span>{historyData.length} mesure(s)</span>
               </div>
+              {/* Le bouton d'exportation est désactivé et son opacité est réduite si le tableau de données est vide */}
               <button 
                 onClick={exportToCSV} 
                 style={{
@@ -309,6 +342,7 @@ const HistoryView = () => {
             </div>
           </div>
 
+          {/* Gestion des états asynchrones de l'interface */}
           {isLoading ? (
             <div style={styles.card}>
               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
@@ -324,7 +358,9 @@ const HistoryView = () => {
               </div>
             </div>
           ) : (
+            // Affichage principal si les données sont présentes
             <>
+              {/* Conteneur du graphique (Valorisation visuelle) */}
               <div style={{ ...styles.card, marginBottom: '20px', padding: '20px' }}>
                 <h3 style={styles.sectionTitle}>Évolution sur la journée</h3>
                 <div style={styles.chartContainer}>
@@ -332,6 +368,7 @@ const HistoryView = () => {
                 </div>
               </div>
 
+              {/* Conteneur du tableau (Vue analytique détaillée) */}
               <div style={styles.card}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={styles.table}>
@@ -344,6 +381,7 @@ const HistoryView = () => {
                       </tr>
                     </thead>
                     <tbody>
+                      {/* Itération sur les données brutes (non inversées, pour afficher les plus récentes en haut du tableau) */}
                       {historyData.map((item, index) => {
                         const dateFormatee = formatDate(item.date);
                         const poidsKg = (parseFloat(item.weight) / 1000).toFixed(2);
@@ -379,6 +417,7 @@ const HistoryView = () => {
   );
 };
 
+// Dictionnaire des styles CSS en JSS (JavaScript Style Sheets)
 const styles = {
   container: { padding: '20px', maxWidth: '1000px', margin: '0 auto', width: '100%' },
   header: { marginBottom: '20px' },
