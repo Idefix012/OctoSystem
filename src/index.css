@@ -1,0 +1,24 @@
+/* src/index.css */
+:root {
+  --primary: #4CAF50;    /* Vert Octo */
+  --dark: #2C3E50;       /* Bleu Nuit */
+  --light: #F4F7F6;      /* Gris très clair fond */
+  --white: #FFFFFF;
+  --text-grey: #888888;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', sans-serif; /* Ou ta police système par défaut */
+  background-color: var(--light);
+  color: var(--dark);
+  min-height: 100vh;
+}
+
+ul { list-style: none; }
+a { text-decoration: none; color: inherit; }
